@@ -1,0 +1,28 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>AI Hub</title>
+<meta http-equiv="Content-Security-Policy" content="default-src 'self'; style-src 'self' 'unsafe-inline'">
+<style>
+  body{margin:0;font:14px system-ui,sans-serif;background:#111318;color:#e6e6e6;display:flex;height:100vh}
+  aside{width:220px;background:#181b22;padding:16px;display:flex;flex-direction:column;gap:8px}
+  aside h1{font-size:18px;margin:0 0 8px}
+  .prov{padding:10px;border-radius:8px;cursor:pointer;border:1px solid transparent}
+  .prov:hover{background:#222631}.prov.active{border-color:#6c8cff;background:#222631}
+  .prov small{display:block;color:#8a90a0}.prov.off{opacity:.5}
+  select,button,textarea{font:inherit;background:#222631;color:inherit;border:1px solid #333a48;border-radius:8px;padding:8px}
+  main{flex:1;display:flex;flex-direction:column}
+  #log{flex:1;overflow:auto;padding:20px;display:flex;flex-direction:column;gap:12px}
+  .msg{white-space:pre-wrap;padding:10px 14px;border-radius:10px;max-width:80%}
+  .user{align-self:flex-end;background:#2b3a6b}.ai{background:#1d2029}
+  .ai b{display:block;color:#6c8cff;font-size:12px;margin-bottom:4px}
+  form{display:flex;gap:8px;padding:12px;border-top:1px solid #222631}
+  textarea{flex:1;resize:none;height:60px}button{cursor:pointer}
+</style></head>
+<body>
+<aside><h1>AI Hub</h1><div id="provs"></div>
+  <label>Model</label><select id="model"></select>
+  <button id="clear">Clear chat</button></aside>
+<main><div id="log"></div>
+  <form id="f"><textarea id="in" placeholder="Message… (Enter to send, Shift+Enter for newline)"></textarea>
+  <button id="go">Send</button></form></main>
+<script src="renderer.js"></script>
+</body></html>
