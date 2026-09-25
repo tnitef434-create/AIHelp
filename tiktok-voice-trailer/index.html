@@ -1,0 +1,647 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Voice Messages Trailer (Concept)</title>
+<style>
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-400.ttf) format('truetype');font-weight:400}
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-500.ttf) format('truetype');font-weight:500}
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-600.ttf) format('truetype');font-weight:600}
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-700.ttf) format('truetype');font-weight:700}
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-800.ttf) format('truetype');font-weight:800}
+@font-face{font-family:'TikTok Sans';src:url(fonts/TikTokSans-900.ttf) format('truetype');font-weight:900}
+
+:root{
+  --red:#FE2C55; --cyan:#25F4EE; --ink:#121212; --bubble:#2A2A2D; --muted:#8A8B91; --line:#2B2B2E;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#000;overflow:hidden}
+body{font-family:'TikTok Sans','Noto Color Emoji','Apple Color Emoji',system-ui,sans-serif;color:#fff;-webkit-font-smoothing:antialiased}
+svg{display:block}
+
+#stage{position:absolute;left:50%;top:50%;width:1080px;height:1920px;overflow:hidden;background:#000;
+  transform-origin:center;transform:translate(-50%,-50%)}
+.abs{position:absolute}
+
+/* ---------- background ---------- */
+#bg{position:absolute;inset:0}
+.glow{position:absolute;width:1100px;height:1100px;border-radius:50%;filter:blur(40px);opacity:0}
+.g1{background:radial-gradient(circle,rgba(37,244,238,.42),rgba(37,244,238,0) 62%)}
+.g2{background:radial-gradient(circle,rgba(254,44,85,.46),rgba(254,44,85,0) 62%)}
+#grain{position:absolute;inset:-60px;opacity:.07;mix-blend-mode:screen;
+  background-image:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='240' height='240'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 1  0 0 0 0 1  0 0 0 0 1  0 0 0 1.4 -.2'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>")}
+#bgBars{position:absolute;left:0;right:0;top:1375px;height:220px;margin-top:-110px;display:flex;align-items:center;justify-content:center;gap:14px;opacity:0}
+#bgBars i{display:block;width:14px;border-radius:7px;background:linear-gradient(var(--cyan),var(--red))}
+
+/* ---------- logo ---------- */
+.logo{position:absolute;width:var(--s);height:var(--s)}
+.logo svg{position:absolute;inset:0;width:100%;height:100%}
+.logo .c{color:var(--cyan)} .logo .r{color:var(--red)} .logo .w{color:#fff}
+
+/* ---------- intro ---------- */
+#intro{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+#introLogo{--s:230px;position:relative;margin-bottom:90px}
+.kline{overflow:hidden;padding:6px 20px;line-height:1}
+.kline span{display:inline-block;font-weight:900;font-size:128px;letter-spacing:-4px;will-change:transform}
+.rgb{text-shadow:-5px -4px 0 var(--cyan),5px 4px 0 var(--red)}
+
+/* ---------- phone ---------- */
+#phoneWrap{position:absolute;inset:0;transform-origin:540px 1701px}
+#phone{position:absolute;left:50%;top:400px;width:418px;height:872px;margin-left:-209px;border-radius:64px;
+  background:linear-gradient(145deg,#3a3a3e,#111 40%,#26262a);padding:14px;
+  transform-origin:top center;transform:scale(1.66);
+  box-shadow:0 0 0 2px #4a4a50 inset,0 60px 120px rgba(0,0,0,.7),0 0 160px rgba(254,44,85,.18)}
+#phone::before{content:"";position:absolute;inset:5px;border-radius:59px;border:2px solid #000}
+#screen{position:relative;width:390px;height:844px;border-radius:50px;overflow:hidden;background:var(--ink);display:flex;flex-direction:column}
+.island{position:absolute;left:50%;top:11px;width:124px;height:36px;margin-left:-62px;border-radius:20px;background:#000;z-index:5}
+.status{height:54px;flex:none;display:flex;align-items:center;justify-content:space-between;padding:6px 30px 0 44px;font-weight:600;font-size:16px}
+.status .r{display:flex;gap:6px;align-items:center}
+.chathead{height:58px;flex:none;display:flex;align-items:center;padding:0 12px 0 8px;border-bottom:.5px solid var(--line);gap:10px}
+.av{border-radius:50%;flex:none;display:grid;place-items:center;font-weight:700;color:#fff;
+  background:linear-gradient(135deg,#ff7aa2,#b46bff 55%,#4fd1ff)}
+.chathead .av{width:40px;height:40px;font-size:17px;position:relative}
+.chathead .av::after{content:"";position:absolute;right:0;bottom:0;width:11px;height:11px;border-radius:50%;background:#20D56B;border:2px solid var(--ink)}
+.who{flex:1;line-height:1.2}
+.who b{display:block;font-size:16px;font-weight:700}
+.who small{font-size:12.5px;color:var(--muted)}
+.hicons{display:flex;gap:18px;align-items:center;padding-right:6px}
+
+#chat{flex:1;display:flex;flex-direction:column;justify-content:flex-end;overflow:hidden;padding:0 12px 10px}
+.m{flex:none;overflow:visible}
+.row{display:flex;align-items:flex-end;gap:8px;padding-top:10px}
+.row.s{justify-content:flex-end}
+.row .av{width:30px;height:30px;font-size:13px}
+.b{max-width:250px;padding:10px 14px;border-radius:18px;font-size:15.5px;line-height:1.35;background:var(--bubble);position:relative}
+.row.s .b{background:var(--red)}
+.stamp{text-align:center;color:var(--muted);font-size:12px;padding:6px 0 2px}
+.card{width:190px;border-radius:14px;overflow:hidden;background:var(--bubble)}
+.thumb{height:250px;position:relative;background:
+  radial-gradient(circle at 70% 25%,rgba(255,220,120,.9),rgba(255,220,120,0) 35%),
+  linear-gradient(160deg,#6a3cff,#ff3d7f 55%,#ff9a3d)}
+.thumb .fig{position:absolute;left:50%;bottom:0;width:90px;height:150px;margin-left:-45px;border-radius:45px 45px 0 0;background:rgba(0,0,0,.35)}
+.thumb .fig::before{content:"";position:absolute;left:50%;top:-44px;width:56px;height:56px;margin-left:-28px;border-radius:50%;background:rgba(0,0,0,.35)}
+.thumb .views{position:absolute;left:10px;bottom:9px;display:flex;gap:4px;align-items:center;font-size:13px;font-weight:700;text-shadow:0 1px 3px rgba(0,0,0,.5)}
+.card .cap{padding:9px 11px 11px;font-size:13px;line-height:1.3}
+.card .cap b{display:block;font-size:13px;margin-bottom:2px}
+.card .cap span{color:#c9c9cf}
+
+.voice{display:flex;align-items:center;gap:10px;padding:8px 12px 8px 8px;width:252px}
+.play{width:32px;height:32px;border-radius:50%;background:#fff;display:grid;place-items:center;flex:none;position:relative}
+.play svg{position:absolute}
+.wave{flex:1;display:flex;align-items:center;gap:2px;height:30px}
+.wave i{display:block;width:3px;border-radius:2px;flex:none}
+.row.s .wave i{background:rgba(255,255,255,.95)}
+.row:not(.s) .wave i{background:#6d6d74}
+.dur{font-size:12.5px;font-weight:600;font-variant-numeric:tabular-nums;min-width:28px;text-align:right}
+.speed{font-size:11.5px;font-weight:700;padding:3px 7px;border-radius:9px;background:#434348;flex:none}
+.react{position:absolute;right:-6px;bottom:-12px;width:30px;height:24px;border-radius:12px;background:#2F2F33;border:2px solid var(--ink);display:grid;place-items:center;opacity:0}
+.typing{display:flex;gap:5px;padding:14px 16px}
+.typing i{width:8px;height:8px;border-radius:50%;background:#9a9aa2}
+
+#composer{flex:none;height:62px;display:flex;align-items:center;gap:10px;padding:0 12px;position:relative}
+.field{flex:1;height:44px;border-radius:22px;background:var(--bubble);position:relative}
+.field .inner{position:absolute;inset:0;display:flex;align-items:center;padding:0 14px 0 16px;gap:14px}
+.field .ph{flex:1;color:var(--muted);font-size:15.5px}
+#recBar{position:absolute;inset:0;display:flex;align-items:center;gap:10px;padding:0 16px;opacity:0}
+.recdot{width:10px;height:10px;border-radius:50%;background:var(--red);flex:none}
+#recTime{font-size:15px;font-weight:600;font-variant-numeric:tabular-nums;width:36px}
+#liveWave{flex:1;display:flex;align-items:center;gap:2px;height:30px;overflow:hidden}
+#liveWave i{display:block;width:3px;border-radius:2px;background:#fff;flex:none}
+#mic{width:44px;height:44px;position:relative;flex:none;display:grid;place-items:center}
+#mic .bgc,#mic .pulse{position:absolute;inset:0;border-radius:50%}
+#mic .bgc{background:var(--red);transform:scale(0)}
+#mic .pulse{border:2px solid var(--red);opacity:0}
+#mic svg{position:relative}
+#hint{position:absolute;right:4px;bottom:74px;background:#fff;color:#111;font-size:12.5px;font-weight:700;padding:7px 11px;border-radius:10px;opacity:0;white-space:nowrap}
+#hint::after{content:"";position:absolute;right:26px;bottom:-5px;width:10px;height:10px;background:#fff;transform:rotate(45deg)}
+.homebar{height:34px;flex:none;position:relative}
+.homebar::after{content:"";position:absolute;left:50%;bottom:8px;width:134px;height:5px;margin-left:-67px;border-radius:3px;background:#fff}
+
+#touch{position:absolute;left:0;top:0;width:46px;height:46px;margin:-23px 0 0 -23px;border-radius:50%;
+  background:rgba(255,255,255,.28);border:2px solid rgba(255,255,255,.75);opacity:0;z-index:20;box-shadow:0 0 20px rgba(0,0,0,.3)}
+#bigHeart{position:absolute;left:0;top:0;width:90px;height:90px;margin:-45px 0 0 -45px;opacity:0;z-index:21}
+.spark{position:absolute;left:0;top:0;width:10px;height:10px;margin:-5px 0 0 -5px;border-radius:50%;opacity:0;z-index:21}
+
+/* ---------- captions ---------- */
+#scrim{position:absolute;left:0;right:0;top:0;height:560px;background:linear-gradient(#000 0%,rgba(0,0,0,.92) 45%,rgba(0,0,0,0));pointer-events:none}
+.capt{position:absolute;left:0;right:0;top:120px;text-align:center}
+.kick{display:inline-block;overflow:hidden;margin-bottom:14px}
+.kick span{display:inline-block;font-size:30px;font-weight:800;letter-spacing:5px;padding:9px 20px 8px;border-radius:30px;background:var(--red)}
+.kick.num span{background:none;border:3px solid rgba(255,255,255,.9);padding:6px 18px 5px}
+.title{font-size:98px;font-weight:900;letter-spacing:-3px;line-height:1.02;white-space:nowrap}
+.title .w{display:inline-block;overflow:hidden;padding:0 8px;vertical-align:top}
+.title .w span{display:inline-block}
+
+/* ---------- wipe ---------- */
+#wipe{position:absolute;inset:0;pointer-events:none;z-index:40}
+#wipe i{position:absolute;left:0;width:100%;transform:translateX(-110%)}
+#flash{position:absolute;inset:0;background:#fff;opacity:0;z-index:41;pointer-events:none}
+
+/* ---------- end card ---------- */
+#end{position:absolute;inset:0;opacity:0}
+#lockup{position:absolute;left:0;right:0;top:470px;display:flex;align-items:center;justify-content:center;gap:22px}
+#lockup .logo{--s:120px;position:relative}
+#lockup .word{font-size:104px;font-weight:800;letter-spacing:-3px}
+#endTitle{position:absolute;left:0;right:0;top:700px;text-align:center;font-size:150px;font-weight:900;letter-spacing:-5px;line-height:.98}
+#endTitle .w{display:inline-block;overflow:hidden;padding:4px 14px}
+#endTitle .w span{display:inline-block}
+#endSub{position:absolute;left:0;right:0;top:1068px;text-align:center;font-size:48px;font-weight:500;color:#cfcfd4}
+#cta{position:absolute;left:50%;top:1175px;width:460px;margin-left:-230px;height:110px;border-radius:14px;background:var(--red);
+  display:flex;align-items:center;justify-content:center;gap:16px;font-size:44px;font-weight:700}
+#concept{position:absolute;left:50%;top:1500px;margin-left:-245px;width:490px;height:130px;border:7px solid #fff;border-radius:18px;
+  display:grid;place-items:center;font-size:74px;font-weight:900;letter-spacing:18px;padding-left:18px;opacity:0}
+#fine{position:absolute;left:90px;right:90px;top:1700px;text-align:center;font-size:27px;line-height:1.45;color:#9d9da5;opacity:0}
+
+/* ---------- player chrome (hidden when rendering) ---------- */
+#ctl{position:fixed;left:50%;bottom:14px;transform:translateX(-50%);display:flex;gap:8px;z-index:99;font:600 13px system-ui,sans-serif}
+#ctl button{border:0;border-radius:18px;padding:8px 14px;background:rgba(255,255,255,.14);color:#fff;cursor:pointer}
+#ctl button:hover{background:rgba(255,255,255,.24)}
+.render #ctl{display:none}
+</style>
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true"><defs>
+  <symbol id="note" viewBox="0 0 100 100">
+    <path d="M58 8V67A20 20 0 1 1 38 47" fill="none" stroke="currentColor" stroke-width="14"/>
+    <path d="M58 8C59.5 24 71 34.5 87 35" fill="none" stroke="currentColor" stroke-width="14"/>
+  </symbol>
+  <symbol id="i-mic" viewBox="0 0 24 24"><rect x="8.5" y="2.5" width="7" height="12" rx="3.5" fill="none" stroke="currentColor" stroke-width="2"/><path d="M5 11a7 7 0 0 0 14 0M12 18v3.5" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></symbol>
+  <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.2v13.6a.8.8 0 0 0 1.2.7l10.6-6.8a.8.8 0 0 0 0-1.4L9.2 4.5A.8.8 0 0 0 8 5.2z" fill="currentColor"/></symbol>
+  <symbol id="i-pause" viewBox="0 0 24 24"><rect x="6" y="5" width="4" height="14" rx="1.2" fill="currentColor"/><rect x="14" y="5" width="4" height="14" rx="1.2" fill="currentColor"/></symbol>
+  <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 21.2s-8.6-5.3-9.9-10.6C1.2 6.9 3.6 3.6 7 3.6c2.1 0 3.8 1.2 5 3 1.2-1.8 2.9-3 5-3 3.4 0 5.8 3.3 4.9 7-1.3 5.3-9.9 10.6-9.9 10.6z" fill="currentColor"/></symbol>
+</defs></svg>
+
+<div id="stage">
+  <div id="bg">
+    <div class="glow g1"></div><div class="glow g2"></div>
+    <div id="bgBars"></div>
+    <div id="grain"></div>
+  </div>
+
+  <!-- INTRO -->
+  <div id="intro">
+    <div id="introLogo" class="logo">
+      <svg class="c"><use href="#note"/></svg><svg class="r"><use href="#note"/></svg><svg class="w"><use href="#note"/></svg>
+    </div>
+    <div class="kline"><span id="k1" class="rgb">Say it.</span></div>
+    <div class="kline"><span id="k2">Don’t type it.</span></div>
+  </div>
+
+  <!-- PHONE SCENE -->
+  <div id="scene">
+    <div id="phoneWrap">
+      <div id="phone">
+        <div id="screen">
+          <div class="island"></div>
+          <div class="status">
+            <span>9:41</span>
+            <span class="r">
+              <svg width="18" height="12" viewBox="0 0 18 12"><rect x="0" y="8" width="3" height="4" rx="1" fill="#fff"/><rect x="5" y="5.5" width="3" height="6.5" rx="1" fill="#fff"/><rect x="10" y="3" width="3" height="9" rx="1" fill="#fff"/><rect x="15" y="0" width="3" height="12" rx="1" fill="#fff"/></svg>
+              <svg width="17" height="12" viewBox="0 0 17 12"><path d="M8.5 11.5l2.3-2.8a3.6 3.6 0 0 0-4.6 0z" fill="#fff"/><path d="M3.9 6.6a7 7 0 0 1 9.2 0M1.2 3.6a11 11 0 0 1 14.6 0" fill="none" stroke="#fff" stroke-width="1.8" stroke-linecap="round"/></svg>
+              <svg width="27" height="13" viewBox="0 0 27 13"><rect x=".5" y=".5" width="23" height="12" rx="3.5" fill="none" stroke="rgba(255,255,255,.45)"/><rect x="2.5" y="2.5" width="17" height="8" rx="2" fill="#fff"/><path d="M25 4.5v4a2 2 0 0 0 0-4z" fill="rgba(255,255,255,.45)"/></svg>
+            </span>
+          </div>
+          <div class="chathead">
+            <svg width="26" height="26" viewBox="0 0 24 24"><path d="M15 4.5L7.5 12l7.5 7.5" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+            <div class="av">M</div>
+            <div class="who"><b>maya ✨</b><small>Active now</small></div>
+            <div class="hicons">
+              <svg width="22" height="22" viewBox="0 0 24 24"><path d="M5 21.5V3.5h12.5l-2 4.5 2 4.5H5" fill="none" stroke="#fff" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/></svg>
+              <svg width="24" height="24" viewBox="0 0 24 24"><circle cx="5" cy="12" r="2" fill="#fff"/><circle cx="12" cy="12" r="2" fill="#fff"/><circle cx="19" cy="12" r="2" fill="#fff"/></svg>
+            </div>
+          </div>
+
+          <div id="chat">
+            <div class="stamp">Today 9:36 PM</div>
+            <div class="m"><div class="row"><div class="av">M</div>
+              <div class="card"><div class="thumb"><div class="fig"></div>
+                <div class="views"><svg width="13" height="13"><use href="#i-play" fill="#fff" color="#fff"/></svg>2.4M</div></div>
+                <div class="cap"><b>@lil.kev</b><span>POV: your group chat at 3am 😭 #fyp</span></div></div></div></div>
+            <div class="m"><div class="row s"><div class="b">LMAOOO 😭😭</div></div></div>
+            <div class="m" data-in="1.55"><div class="row"><div class="av">M</div><div class="b">wait u can send voice messages now??</div></div></div>
+            <div class="m" data-in="1.9"><div class="row s"><div class="b">no way. trying it rn</div></div></div>
+            <div class="m" data-in="4.28" id="mSent"><div class="row s"><div class="b voice" id="sentVoice">
+              <div class="play"><svg width="16" height="16" style="color:var(--red)"><use href="#i-play"/></svg></div>
+              <div class="wave" data-seed="3"></div><div class="dur">0:04</div></div></div></div>
+            <div class="m" data-in="4.95" data-out="5.38" id="mTyping"><div class="row"><div class="av">M</div><div class="b typing"><i></i><i></i><i></i></div></div></div>
+            <div class="m" data-in="5.38" id="mRecv"><div class="row"><div class="av">M</div><div class="b voice" id="recvVoice">
+              <div class="play" id="recvPlay"><svg id="pIcon" width="16" height="16" style="color:#111"><use href="#i-play"/></svg><svg id="zIcon" width="16" height="16" style="color:#111;opacity:0"><use href="#i-pause"/></svg></div>
+              <div class="wave" data-seed="11"></div><div class="dur" id="recvDur">0:06</div><div class="speed" id="speed">1x</div>
+              <div class="react" id="react"><svg width="15" height="15" style="color:var(--red)"><use href="#i-heart"/></svg></div></div></div></div>
+          </div>
+
+          <div id="composer">
+            <div class="field" id="field">
+              <div class="inner" id="fieldInner">
+                <span class="ph">Message...</span>
+                <svg width="23" height="23" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9.5" fill="none" stroke="#fff" stroke-width="1.9"/><circle cx="9" cy="10" r="1.3" fill="#fff"/><circle cx="15" cy="10" r="1.3" fill="#fff"/><path d="M8 14.2c1 1.5 2.4 2.2 4 2.2s3-.7 4-2.2" fill="none" stroke="#fff" stroke-width="1.9" stroke-linecap="round"/></svg>
+                <svg width="23" height="23" viewBox="0 0 24 24"><rect x="3" y="4" width="18" height="16" rx="3.5" fill="none" stroke="#fff" stroke-width="1.9"/><circle cx="8.5" cy="9.5" r="1.7" fill="#fff"/><path d="M4 18l5-5 3.5 3.5L16 13l4 4" fill="none" stroke="#fff" stroke-width="1.9" stroke-linejoin="round"/></svg>
+              </div>
+              <div id="recBar"><span class="recdot" id="recDot"></span><span id="recTime">0:00</span><div id="liveWave"></div></div>
+            </div>
+            <div id="mic"><div class="pulse"></div><div class="pulse"></div><div class="bgc"></div>
+              <svg width="26" height="26" style="color:#fff"><use href="#i-mic"/></svg></div>
+            <div id="hint">Release to send</div>
+          </div>
+          <div class="homebar"></div>
+
+          <div id="touch"></div>
+          <svg id="bigHeart" style="color:var(--red)"><use href="#i-heart"/></svg>
+        </div>
+      </div>
+    </div>
+    <div id="scrim"></div>
+    <div class="capt" id="c0"><div class="kick"><span>NEW IN DMs</span></div><div class="title">Voice Messages</div></div>
+    <div class="capt" id="c1"><div class="kick num"><span>01</span></div><div class="title">Hold to record</div></div>
+    <div class="capt" id="c2"><div class="kick num"><span>02</span></div><div class="title">Let go to send</div></div>
+    <div class="capt" id="c3"><div class="kick num"><span>03</span></div><div class="title">Listen at 2x</div></div>
+    <div class="capt" id="c4"><div class="kick num"><span>04</span></div><div class="title">Double-tap to react</div></div>
+  </div>
+
+  <!-- END CARD -->
+  <div id="end">
+    <div id="lockup">
+      <div class="logo" id="endLogo"><svg class="c"><use href="#note"/></svg><svg class="r"><use href="#note"/></svg><svg class="w"><use href="#note"/></svg></div>
+      <div class="word" id="endWord">TikTok</div>
+    </div>
+    <div id="endTitle"><div class="w"><span>Voice</span></div><br><div class="w"><span class="rgb">Messages</span></div></div>
+    <div id="endSub">Now in your inbox.</div>
+    <div id="cta"><svg width="40" height="40" style="color:#fff"><use href="#i-mic"/></svg>Update now</div>
+    <div id="concept">CONCEPT</div>
+    <div id="fine">Fan-made concept. Not affiliated with, endorsed by,<br>or sponsored by TikTok or ByteDance.</div>
+  </div>
+
+  <div id="wipe"></div>
+  <div id="flash"></div>
+</div>
+
+<div id="ctl"><button id="bPlay">Pause</button><button id="bReplay">Replay</button></div>
+
+<script>
+(() => {
+const DUR = 10;
+const $ = s => document.querySelector(s);
+const $$ = s => [...document.querySelectorAll(s)];
+const clamp = (x, a = 0, b = 1) => Math.min(b, Math.max(a, x));
+const lerp = (a, b, p) => a + (b - a) * p;
+const P = (t, a, b) => clamp((t - a) / (b - a));
+const E = {
+  out3: p => 1 - Math.pow(1 - p, 3),
+  out5: p => 1 - Math.pow(1 - p, 5),
+  in3: p => p * p * p,
+  io3: p => p < .5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2,
+  io5: p => p < .5 ? 16 * Math.pow(p, 5) : 1 - Math.pow(-2 * p + 2, 5) / 2,
+  back: p => { const c = 1.9; return 1 + (c + 1) * Math.pow(p - 1, 3) + c * Math.pow(p - 1, 2); },
+  expo: p => p >= 1 ? 1 : 1 - Math.pow(2, -10 * p),
+};
+const rnd = n => { const x = Math.sin(n * 127.1 + 311.7) * 43758.5453; return x - Math.floor(x); };
+
+/* ---- build dynamic bits ---- */
+$$('.wave').forEach(w => {
+  const seed = +w.dataset.seed, N = 30;
+  for (let i = 0; i < N; i++) {
+    const env = Math.pow(Math.sin(Math.PI * (i + 1) / (N + 1)), .45);
+    const h = 4 + 22 * env * (.25 + .75 * rnd(i * 3.7 + seed));
+    const b = document.createElement('i'); b.style.height = h.toFixed(1) + 'px'; w.appendChild(b);
+  }
+});
+const live = $('#liveWave');
+for (let i = 0; i < 34; i++) live.appendChild(document.createElement('i'));
+const liveBars = [...live.children];
+const bgBars = $('#bgBars');
+for (let i = 0; i < 44; i++) bgBars.appendChild(document.createElement('i'));
+const bgBarEls = [...bgBars.children];
+const wipe = $('#wipe');
+const wipeCols = ['#25F4EE', '#FE2C55', '#fff', '#FE2C55', '#25F4EE', '#000', '#FE2C55', '#fff', '#25F4EE', '#000'];
+wipeCols.forEach((c, i) => {
+  const b = document.createElement('i');
+  b.style.cssText = `top:${i * 192}px;height:194px;background:${c}`;
+  wipe.appendChild(b);
+});
+const wipeBars = [...wipe.children];
+const screen = $('#screen');
+const sparks = [];
+for (let i = 0; i < 10; i++) {
+  const s = document.createElement('div'); s.className = 'spark';
+  s.style.background = i % 2 ? 'var(--cyan)' : 'var(--red)';
+  screen.appendChild(s); sparks.push(s);
+}
+// split caption titles into masked words
+$$('.capt .title').forEach(t => {
+  t.innerHTML = t.textContent.split(' ').map(w => `<div class="w"><span>${w}</span></div>`).join(' ');
+});
+
+/* ---- measure messages ---- */
+const msgs = $$('#chat .m').map(el => ({ el, inner: el.firstElementChild, h: el.offsetHeight,
+  tin: el.dataset.in ? +el.dataset.in : null, tout: el.dataset.out ? +el.dataset.out : null,
+  sent: !!el.querySelector('.row.s') }));
+
+// element center in screen coordinates (unscaled)
+function center(el) {
+  let x = el.offsetWidth / 2, y = el.offsetHeight / 2, n = el;
+  while (n && n !== screen) { x += n.offsetLeft; y += n.offsetTop; n = n.offsetParent; }
+  return [x, y];
+}
+
+const recvBars = [...$('#recvVoice .wave').children];
+const els = {
+  intro: $('#intro'), introLogo: $('#introLogo'), k1: $('#k1'), k2: $('#k2'),
+  scene: $('#scene'), wrap: $('#phoneWrap'), g1: $('.g1'), g2: $('.g2'), grain: $('#grain'),
+  inner: $('#fieldInner'), recBar: $('#recBar'), recDot: $('#recDot'), recTime: $('#recTime'),
+  micBg: $('#mic .bgc'), pulses: $$('#mic .pulse'), hint: $('#hint'), touch: $('#touch'),
+  pIcon: $('#pIcon'), zIcon: $('#zIcon'), recvDur: $('#recvDur'), speed: $('#speed'),
+  react: $('#react'), heart: $('#bigHeart'), typingDots: $$('.typing i'),
+  end: $('#end'), endLogo: $('#endLogo'), endWord: $('#endWord'), endTitleW: $$('#endTitle .w span'),
+  endSub: $('#endSub'), cta: $('#cta'), concept: $('#concept'), fine: $('#fine'), flash: $('#flash'),
+};
+const caps = [
+  { el: $('#c0'), a: 1.38, b: 2.28 },
+  { el: $('#c1'), a: 2.42, b: 4.18 },
+  { el: $('#c2'), a: 4.3, b: 5.42 },
+  { el: $('#c3'), a: 5.52, b: 6.72 },
+  { el: $('#c4'), a: 6.8, b: 7.42 },
+].map(c => ({ ...c, kick: c.el.querySelector('.kick span'), words: [...c.el.querySelectorAll('.title .w span')] }));
+
+/* ---- logo glitch ---- */
+function logo(el, t, start, sepBase) {
+  const [c, r, w] = el.children;
+  const f = Math.floor(t * 30);
+  const g = t >= start && t < start + .32;   // glitch window
+  const amp = g ? 18 * (1 - P(t, start, start + .32)) : 0;
+  const jx = g ? (rnd(f) - .5) * amp * 2 : 0;
+  const sep = sepBase + (g ? rnd(f + 9) * amp : 0);
+  c.style.transform = `translate(${-sep + jx * .6}px,${-sep}px)`;
+  r.style.transform = `translate(${sep - jx * .6}px,${sep}px)`;
+  w.style.transform = `translate(${jx}px,0)`;
+  const clip = g && rnd(f + 3) > .4 ? `inset(${(rnd(f + 5) * 60).toFixed(0)}% 0 ${(rnd(f + 7) * 30).toFixed(0)}% 0)` : 'none';
+  c.style.clipPath = r.style.clipPath = clip;
+}
+
+/* ---- touch indicator: [tIn, tDown, tUp, tOut, target] ---- */
+let taps;
+function initTaps() {
+  const mic = center($('#mic')), play = center($('#recvPlay')), spd = center($('#speed'));
+  const rv = center($('#recvVoice'));
+  taps = [
+    { tin: 2.0, down: 2.32, up: 4.22, out: 4.45, to: mic, from: [mic[0] - 90, mic[1] - 160] },
+    { tin: 5.44, down: 5.58, up: 5.66, out: 5.82, to: play, from: [play[0] + 70, play[1] + 90] },
+    { tin: 6.02, down: 6.16, up: 6.24, out: 6.4, to: spd, from: [spd[0] - 50, spd[1] + 90] },
+    { tin: 6.76, down: 6.88, up: 7.02, out: 7.16, to: [rv[0] + 30, rv[1]], from: [rv[0] + 80, rv[1] + 120], dbl: true },
+  ];
+  window.__heartPos = [rv[0] + 30, rv[1]];
+  window.__reactPos = center($('#react'));
+}
+function renderTouch(t) {
+  const el = els.touch;
+  for (const k of taps) {
+    if (t < k.tin || t > k.out) continue;
+    const mv = E.out3(P(t, k.tin, k.down - .04));
+    const x = lerp(k.from[0], k.to[0], mv), y = lerp(k.from[1], k.to[1], mv);
+    let s = 1.25 - .25 * mv, o = P(t, k.tin, k.tin + .1);
+    if (t >= k.down) s = .78;
+    if (k.dbl && t > k.down + .06 && t < k.up - .02) s = .95;
+    if (t >= k.up) { s = lerp(.78, 1.5, E.out3(P(t, k.up, k.out))); o = 1 - P(t, k.up, k.out); }
+    el.style.opacity = o;
+    el.style.transform = `translate(${x}px,${y}px) scale(${s})`;
+    el.style.background = t >= k.down && t < k.up ? 'rgba(255,255,255,.5)' : 'rgba(255,255,255,.28)';
+    return;
+  }
+  el.style.opacity = 0;
+}
+
+/* ---- camera keys: [t, scale, ty] ---- */
+const cam = [[0, 1, 0], [2.18, 1, 0], [2.75, 1.58, -360], [4.25, 1.58, -360], [4.85, 1.32, -240], [7.2, 1.32, -240]];
+function camAt(t) {
+  if (t <= cam[0][0]) return cam[0];
+  for (let i = 1; i < cam.length; i++) {
+    if (t <= cam[i][0]) {
+      const [t0, s0, y0] = cam[i - 1], [t1, s1, y1] = cam[i];
+      const p = E.io5(P(t, t0, t1));
+      return [t, lerp(s0, s1, p), lerp(y0, y1, p)];
+    }
+  }
+  return cam[cam.length - 1];
+}
+
+function fmt(s) { return '0:0' + Math.max(0, Math.min(9, Math.floor(s))); }
+
+/* ======================= RENDER ======================= */
+function render(t) {
+  const f = Math.floor(t * 30);
+
+  /* background */
+  const bgOn = P(t, 1.1, 1.7);
+  els.g1.style.opacity = bgOn * .9;
+  els.g2.style.opacity = bgOn * .9;
+  els.g1.style.transform = `translate(${-380 + 120 * Math.sin(t * .7)}px,${-200 + 80 * Math.cos(t * .5)}px)`;
+  els.g2.style.transform = `translate(${420 + 100 * Math.cos(t * .6)}px,${1100 + 90 * Math.sin(t * .8)}px)`;
+  els.grain.style.transform = `translate(${(rnd(f) * 60) | 0}px,${(rnd(f + 1) * 60) | 0}px)`;
+
+  /* intro 0 – 1.35 */
+  const introOut = E.in3(P(t, 1.08, 1.34));
+  els.intro.style.opacity = t > 1.36 ? 0 : 1 - introOut;
+  els.intro.style.transform = `scale(${1 + .35 * introOut})`;
+  els.intro.style.filter = introOut > 0 ? `blur(${introOut * 14}px)` : 'none';
+  const lp = E.back(P(t, .04, .36));
+  els.introLogo.style.transform = `scale(${lerp(.3, 1, lp)})`;
+  els.introLogo.style.opacity = P(t, .04, .1);
+  logo(els.introLogo, t, .04, 7);
+  els.k1.style.transform = `translateY(${lerp(120, 0, E.out5(P(t, .38, .62)))}%)`;
+  els.k2.style.transform = `translateY(${lerp(120, 0, E.out5(P(t, .66, .9)))}%)`;
+  const kg = t > .66 && t < .8;
+  els.k1.style.textShadow = `${-5 - (kg ? rnd(f) * 14 : 0)}px -4px 0 var(--cyan),${5 + (kg ? rnd(f + 2) * 14 : 0)}px 4px 0 var(--red)`;
+  els.k2.style.textShadow = t > .72 && t < .9 ? `${(rnd(f + 4) - .5) * 20}px 0 0 var(--cyan),${(rnd(f + 6) - .5) * 20}px 0 0 var(--red)` : 'none';
+
+  /* phone scene 1.15 – 7.7 */
+  const sceneOn = t >= 1.12 && t < 7.72;
+  els.scene.style.display = sceneOn ? '' : 'none';
+  if (sceneOn) {
+    const rise = E.out5(P(t, 1.14, 1.9));
+    const [, s, ty] = camAt(t);
+    const exit = E.in3(P(t, 7.2, 7.62));
+    const rx = lerp(28, 0, rise) + exit * -14;
+    const float = Math.sin(t * 1.3) * 6;
+    els.wrap.style.transform =
+      `perspective(2400px) translateY(${lerp(1500, 0, rise) + ty + float + exit * 700}px) rotateX(${rx}deg) scale(${s * (1 - .25 * exit)})`;
+
+    /* messages */
+    for (const m of msgs) {
+      if (m.tin == null) continue;
+      let p = P(t, m.tin, m.tin + .32);
+      if (m.tout != null) p = t < m.tout ? p : 1 - E.io3(P(t, m.tout, m.tout + .12));
+      m.el.style.height = (m.h * E.out3(p)).toFixed(2) + 'px';
+      const sp = E.back(P(t, m.tin, m.tin + .4));
+      const o = m.tout != null && t >= m.tout ? 1 - P(t, m.tout, m.tout + .08) : P(t, m.tin, m.tin + .12);
+      m.inner.style.opacity = o;
+      m.inner.style.transformOrigin = m.sent ? '100% 100%' : '0 100%';
+      m.inner.style.transform = `scale(${lerp(.4, 1, sp)}) translateY(${lerp(30, 0, E.out3(p))}px)`;
+    }
+    els.typingDots.forEach((d, i) => d.style.transform = `translateY(${-5 * Math.max(0, Math.sin(t * 12 - i * .9))}px)`);
+
+    /* recording */
+    const recIn = P(t, 2.34, 2.48), recOut = P(t, 4.22, 4.36);
+    const rec = recIn * (1 - recOut);
+    els.inner.style.opacity = 1 - rec;
+    els.recBar.style.opacity = rec;
+    els.recBar.style.transform = `translateX(${lerp(24, 0, E.out3(recIn))}px)`;
+    const press = E.back(P(t, 2.32, 2.5)) * (1 - E.out3(P(t, 4.22, 4.4)));
+    els.micBg.style.transform = `scale(${1.42 * press})`;
+    els.pulses.forEach((pl, i) => {
+      const ph = ((t - 2.4) * 1.3 + i * .5) % 1;
+      const on = t > 2.4 && t < 4.22;
+      pl.style.opacity = on ? (1 - ph) * .6 : 0;
+      pl.style.transform = `scale(${1.42 + 1.1 * ph})`;
+    });
+    els.recDot.style.opacity = .35 + .65 * Math.abs(Math.cos((t - 2.4) * 5));
+    els.recTime.textContent = fmt(t < 2.45 ? 0 : Math.min(4, (t - 2.45) / 1.72 * 5));
+    const filled = Math.floor(Math.max(0, t - 2.46) * 26);
+    const shift = Math.max(0, filled - liveBars.length);
+    liveBars.forEach((b, i) => {
+      const n = i + shift;
+      const speech = .35 + .65 * Math.abs(Math.sin(n * .45) * Math.sin(n * .13 + 1));
+      const h = i < filled ? 4 + 24 * speech * (.4 + .6 * rnd(n * 1.7)) : 3;
+      b.style.height = h.toFixed(1) + 'px';
+      b.style.opacity = i < filled ? 1 : .4;
+    });
+    els.hint.style.opacity = P(t, 2.75, 2.9) * (1 - P(t, 4.1, 4.2));
+    els.hint.style.transform = `translateY(${lerp(10, 0, E.back(P(t, 2.75, 2.95)))}px)`;
+
+    /* playback of received voice */
+    const playing = t >= 5.6;
+    els.pIcon.style.opacity = playing ? 0 : 1;
+    els.zIcon.style.opacity = playing ? 1 : 0;
+    const prog = t < 5.62 ? 0 : t < 6.2 ? (t - 5.62) * .3 : Math.min(1, .174 + (t - 6.2) * .6);
+    recvBars.forEach((b, i) => { b.style.background = i / recvBars.length < prog ? 'var(--cyan)' : '#6d6d74'; });
+    els.recvDur.textContent = fmt(6 - prog * 6 + .99);
+    const two = t >= 6.2;
+    els.speed.textContent = two ? '2x' : '1x';
+    els.speed.style.background = two ? 'var(--cyan)' : '#434348';
+    els.speed.style.color = two ? '#000' : '#fff';
+    els.speed.style.transform = `scale(${1 + .45 * Math.sin(Math.PI * P(t, 6.2, 6.4))})`;
+
+    /* heart reaction */
+    const hp = window.__heartPos, rp = window.__reactPos;
+    const hIn = E.back(P(t, 6.9, 7.08)), fly = E.io3(P(t, 7.1, 7.3));
+    els.heart.style.opacity = t > 6.9 && t < 7.3 ? 1 : 0;
+    els.heart.style.transform =
+      `translate(${lerp(hp[0], rp[0], fly)}px,${lerp(hp[1] - 40, rp[1], fly)}px) scale(${lerp(0, 1, hIn) * lerp(1, .18, fly)}) rotate(${lerp(-12, 0, hIn)}deg)`;
+    els.react.style.opacity = t >= 7.28 ? 1 : 0;
+    els.react.style.transform = `scale(${1 + .5 * Math.sin(Math.PI * P(t, 7.28, 7.45))})`;
+    sparks.forEach((sp, i) => {
+      const a = i / sparks.length * Math.PI * 2, d = E.out3(P(t, 6.93, 7.25)) * 70;
+      sp.style.opacity = t > 6.93 && t < 7.25 ? 1 - P(t, 7.05, 7.25) : 0;
+      sp.style.transform = `translate(${hp[0] + Math.cos(a) * d}px,${hp[1] - 40 + Math.sin(a) * d}px) scale(${1 - P(t, 7, 7.25) * .6})`;
+    });
+
+    renderTouch(t);
+
+    /* captions */
+    for (const c of caps) {
+      const vis = t > c.a - .02 && t < c.b + .25;
+      c.el.style.display = vis ? '' : 'none';
+      if (!vis) continue;
+      const out = E.in3(P(t, c.b, c.b + .2));
+      c.kick.style.transform = `translateY(${lerp(110, 0, E.out5(P(t, c.a, c.a + .3))) - out * 110}%)`;
+      c.words.forEach((w, i) => {
+        const pin = E.out5(P(t, c.a + .05 + i * .06, c.a + .4 + i * .06));
+        w.style.transform = `translateY(${lerp(105, 0, pin) - out * 105}%)`;
+      });
+      const g = t - c.a < .12;
+      c.el.style.textShadow = g ? `${(rnd(f) - .5) * 24}px 0 0 var(--cyan),${(rnd(f + 1) - .5) * 24}px 0 0 var(--red)` : '-4px -3px 0 rgba(37,244,238,.85),4px 3px 0 rgba(254,44,85,.85)';
+    }
+  }
+
+  /* wipe 7.38 – 7.95 */
+  wipeBars.forEach((b, i) => {
+    const d = (i % 3) * .03 + rnd(i) * .05;
+    const p = E.io3(P(t, 7.38 + d, 7.9 + d));
+    b.style.transform = `translateX(${lerp(-110, 110, p)}%) skewX(-12deg)`;
+    b.style.display = p > 0 && p < 1 ? '' : 'none';
+  });
+
+  /* end card 7.62 – 10 */
+  const endOn = t >= 7.62;
+  els.end.style.opacity = endOn ? 1 : 0;
+  if (endOn) {
+    els.flash.style.opacity = .55 * (1 - P(t, 7.66, 7.92)) * (t > 7.66 ? 1 : 0);
+    const lk = E.back(P(t, 7.66, 8.0));
+    els.endLogo.style.transform = `scale(${lerp(.2, 1, lk)})`;
+    logo(els.endLogo, t, 7.66, 4.5);
+    els.endWord.style.transform = `translateX(${lerp(-40, 0, E.out5(P(t, 7.78, 8.1)))}px)`;
+    els.endWord.style.opacity = P(t, 7.78, 7.92);
+    els.endTitleW.forEach((w, i) => {
+      w.style.transform = `translateY(${lerp(110, 0, E.out5(P(t, 7.88 + i * .1, 8.3 + i * .1)))}%)`;
+    });
+    const eg = t > 8.02 && t < 8.14;
+    els.endTitleW[1].style.textShadow = eg ? `${(rnd(f) - .5) * 30}px 0 0 var(--cyan),${(rnd(f + 3) - .5) * 30}px 0 0 var(--red)` : '-6px -5px 0 var(--cyan),6px 5px 0 var(--red)';
+    els.endSub.style.opacity = P(t, 8.2, 8.45);
+    els.endSub.style.transform = `translateY(${lerp(24, 0, E.out3(P(t, 8.2, 8.5)))}px)`;
+    const cp = E.back(P(t, 8.4, 8.72));
+    els.cta.style.transform = `scale(${lerp(.5, 1, cp) * (1 + .03 * Math.sin((t - 8.7) * 7) * (t > 8.7 ? 1 : 0))})`;
+    els.cta.style.opacity = P(t, 8.4, 8.5);
+    els.cta.style.boxShadow = `0 0 ${40 + 30 * Math.sin(t * 6)}px rgba(254,44,85,.55)`;
+    // concept stamp slam
+    const st = P(t, 8.95, 9.12);
+    els.concept.style.opacity = st > 0 ? 1 : 0;
+    els.concept.style.transform = `rotate(${lerp(-18, -5, E.out3(st))}deg) scale(${lerp(2.6, 1, E.in3(st))})`;
+    const shake = t > 9.12 && t < 9.3 ? (1 - P(t, 9.12, 9.3)) * 16 : 0;
+    els.end.style.transform = `translate(${(rnd(f) - .5) * shake}px,${(rnd(f + 5) - .5) * shake}px)`;
+    els.fine.style.opacity = P(t, 9.18, 9.45);
+  } else {
+    els.flash.style.opacity = 0;
+  }
+
+  /* reactive bars behind end card */
+  const barsOn = P(t, 8.5, 8.9);
+  bgBars.style.opacity = barsOn * .75;
+  bgBarEls.forEach((b, i) => {
+    const x = i - bgBarEls.length / 2;
+    const env = Math.exp(-(x * x) / 180);
+    const h = 8 + 190 * env * (.35 + .65 * Math.abs(Math.sin(t * 5 + i * .7) * Math.cos(t * 2.3 + i * .31)));
+    b.style.height = h.toFixed(0) + 'px';
+  });
+}
+
+/* ---- boot ---- */
+const params = new URLSearchParams(location.search);
+const RENDER = params.has('render');
+if (RENDER) document.body.classList.add('render');
+
+function fit() {
+  const s = RENDER ? 1 : Math.min(innerWidth / 1080, innerHeight / 1920);
+  $('#stage').style.transform = `translate(-50%,-50%) scale(${s})`;
+}
+addEventListener('resize', fit); fit();
+
+let t0 = null, paused = false, pauseAt = 0;
+function loop(now) {
+  if (!paused) {
+    if (t0 == null) t0 = now;
+    let t = (now - t0) / 1000;
+    if (t > DUR + 1.2) { t0 = now; t = 0; }  // hold last frame briefly, then loop
+    render(Math.min(t, DUR));
+  }
+  requestAnimationFrame(loop);
+}
+
+document.fonts.ready.then(() => {
+  msgs.forEach(m => { m.h = m.el.offsetHeight; });
+  // measure positions with every message fully expanded, then collapse
+  initTaps();
+  window.__seek = t => render(t);
+  window.__ready = true;
+  if (!RENDER) {
+    render(0);
+    requestAnimationFrame(loop);
+    $('#bPlay').onclick = e => {
+      paused = !paused; e.target.textContent = paused ? 'Play' : 'Pause';
+      if (paused) pauseAt = performance.now(); else t0 += performance.now() - pauseAt;
+    };
+    $('#bReplay').onclick = () => { t0 = null; if (paused) $('#bPlay').click(); };
+  }
+});
+})();
+</script>
+</body>
+</html>
