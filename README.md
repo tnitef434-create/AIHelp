@@ -18,3 +18,6 @@ Works on GitHub Pages as-is.
 
 ## Going real
 Replace the methods in `js/store.js` with API calls (e.g. Supabase, Firebase, or your own backend), and add accounts — GitHub OAuth fits naturally since users already link repos.
+
+## Live demo
+https://claude.ai/artifact/R5tGPs9DXNtpzkzUV5Zrh3
