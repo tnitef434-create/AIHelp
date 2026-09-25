@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>AIHelp — Community Help Board</title>
+  <meta name="description" content="Post problems with your site or project, link your GitHub repo, and get help from the community." />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap topbar-inner">
+      <a class="brand" href="#" data-nav="home"><span class="logo">◆</span> AIHelp</a>
+      <input id="search" class="search" type="search" placeholder="Search issues, tags, repos…" aria-label="Search" />
+      <button class="btn btn-primary" data-open="new">+ Ask for help</button>
+      <button class="btn btn-ghost icon" id="themeToggle" aria-label="Toggle theme">◐</button>
+    </div>
+  </header>
+
+  <main class="wrap layout">
+    <aside class="sidebar" aria-label="Filters">
+      <section>
+        <h3>Status</h3>
+        <div class="chips" id="statusFilters"></div>
+      </section>
+      <section>
+        <h3>Category</h3>
+        <ul class="facet" id="categoryFilters"></ul>
+      </section>
+      <section>
+        <h3>Tech / Stack</h3>
+        <div class="chips" id="tagFilters"></div>
+      </section>
+      <section>
+        <h3>Urgency</h3>
+        <div class="chips" id="urgencyFilters"></div>
+      </section>
+      <section>
+        <label class="check"><input type="checkbox" id="repoOnly" /> Has GitHub link</label>
+      </section>
+      <button class="btn btn-ghost full" id="clearFilters">Clear filters</button>
+    </aside>
+
+    <section class="content">
+      <div class="hero" id="hero">
+        <h1>Stuck on your project? Ask the community.</h1>
+        <p>Describe the problem, link your GitHub repo, pick a category — and let people who've been there help you out.</p>
+      </div>
+      <div class="toolbar">
+        <span id="resultCount" class="muted"></span>
+        <label class="muted">Sort
+          <select id="sort">
+            <option value="new">Newest</option>
+            <option value="votes">Most upvoted</option>
+            <option value="unanswered">Unanswered first</option>
+            <option value="replies">Most replies</option>
+          </select>
+        </label>
+      </div>
+      <div id="list" class="list"></div>
+    </section>
+  </main>
+
+  <!-- New issue dialog -->
+  <dialog id="newDialog" class="dialog">
+    <form id="newForm" method="dialog">
+      <header class="dialog-head"><h2>Ask for help</h2><button type="button" class="btn btn-ghost icon" data-close>✕</button></header>
+      <label>Title <input name="title" required maxlength="140" placeholder="e.g. Next.js build fails on Vercel but works locally" /></label>
+      <div class="row">
+        <label>Category <select name="category" required id="catSelect"></select></label>
+        <label>Urgency <select name="urgency" id="urgSelect"></select></label>
+      </div>
+      <label>GitHub repo / page <input name="repo" type="url" placeholder="https://github.com/you/your-project" pattern="https://(www\.)?github\.com/.+" /></label>
+      <label>Live site (optional) <input name="site" type="url" placeholder="https://your-site.com" /></label>
+      <label>Describe the problem <textarea name="body" rows="7" required placeholder="What did you expect? What happened instead? Error messages, steps to reproduce, what you've tried…"></textarea></label>
+      <label>Tags <input name="tags" placeholder="react, css, deployment (comma separated)" /></label>
+      <label>Your name <input name="author" maxlength="40" placeholder="Anonymous" /></label>
+      <footer class="dialog-foot"><button type="button" class="btn btn-ghost" data-close>Cancel</button><button class="btn btn-primary" value="submit">Post issue</button></footer>
+    </form>
+  </dialog>
+
+  <!-- Detail dialog -->
+  <dialog id="detailDialog" class="dialog wide"><div id="detail"></div></dialog>
+
+  <footer class="wrap foot muted">Concept prototype · data is stored in your browser only · <a href="#" id="resetData">reset demo data</a></footer>
+
+  <script src="js/data.js"></script>
+  <script src="js/store.js"></script>
+  <script src="js/app.js"></script>
+</body>
+</html>
