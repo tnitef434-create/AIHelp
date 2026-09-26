@@ -1,8 +1,99 @@
 {
-  "name": "ai-hub",
+  "name": "onyx",
+  "productName": "Onyx",
   "version": "1.0.0",
-  "description": "Desktop hub to chat with Claude Code, Codex and OpenCode CLIs from one window",
+  "description": "Onyx: one desktop app to chat with the Claude Code, ChatGPT (Codex) and OpenCode CLIs",
+  "author": "Onyx",
+  "homepage": "https://unpaused.online/Onyx/",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/tnitef434-create/AIHelp.git"
+  },
   "main": "main.js",
-  "scripts": { "start": "electron ." },
-  "devDependencies": { "electron": "^31.0.0" }
+  "scripts": {
+    "start": "electron .",
+    "icon": "electron build-icon.js",
+    "dist": "electron-builder",
+    "dist:win": "electron-builder --win",
+    "dist:mac": "electron-builder --mac",
+    "dist:linux": "electron-builder --linux"
+  },
+  "devDependencies": {
+    "electron": "^31.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "app.onyx.desktop",
+    "productName": "Onyx",
+    "copyright": "Copyright © 2026 Onyx",
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer.js",
+      "index.html",
+      "logo.svg",
+      "icon.png"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "tnitef434-create",
+        "repo": "AIHelp",
+        "releaseType": "release"
+      }
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "icon.ico",
+      "artifactName": "Onyx-Setup.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Onyx"
+    },
+    "mac": {
+      "target": [
+        {
+          "target": "dmg",
+          "arch": [
+            "universal"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "public.app-category.developer-tools",
+      "artifactName": "Onyx.${ext}"
+    },
+    "dmg": {
+      "title": "Onyx"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "build/icon.png",
+      "category": "Development",
+      "artifactName": "Onyx.${ext}",
+      "synopsis": "Chat with Claude Code, ChatGPT and OpenCode in one app"
+    }
+  }
 }

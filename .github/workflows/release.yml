@@ -1,0 +1,73 @@
+# Builds the Onyx installers on Windows, macOS and Linux and publishes them as a GitHub Release.
+# Run it by pushing a version tag (e.g. `git tag v1.0.0 && git push origin v1.0.0`) or from the Actions tab.
+name: Release Onyx
+
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Release tag to create (e.g. v1.0.0)'
+        required: true
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: --win
+            file: desktop-hub/dist/Onyx-Setup.exe
+          - os: macos-latest
+            target: --mac
+            file: desktop-hub/dist/Onyx.dmg
+          - os: ubuntu-latest
+            target: --linux
+            file: desktop-hub/dist/Onyx.AppImage
+    runs-on: ${{ matrix.os }}
+    defaults:
+      run:
+        working-directory: desktop-hub
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+          cache-dependency-path: desktop-hub/package-lock.json
+      - run: npm ci
+      - name: Build installer
+        run: npx electron-builder ${{ matrix.target }} --publish never
+        env:
+          # Installers are not code-signed yet.
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+      - uses: actions/upload-artifact@v4
+        with:
+          name: installer-${{ matrix.os }}
+          path: ${{ matrix.file }}
+          if-no-files-found: error
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/download-artifact@v4
+        with:
+          path: installers
+          merge-multiple: true
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.event.inputs.tag || github.ref_name }}
+        run: |
+          ls -la installers
+          gh release create "$TAG" installers/* \
+            --title "Onyx ${TAG#v}" \
+            --notes "Download Onyx for Windows (.exe), macOS (.dmg) or Linux (.AppImage) below, or visit https://unpaused.online/Onyx/" \
+            --target "$GITHUB_SHA" --latest
