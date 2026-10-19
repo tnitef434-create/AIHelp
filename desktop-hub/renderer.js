@@ -765,13 +765,13 @@ function effortPop(pop) {
   pop.append(list);
 }
 
-// Supervisor on/off for this chat; the choice is also the default for new chats.
+// Supervisor on/off for this chat; the choice is also the default for new chats. The chip shows
+// the state, so a brief toast confirms the change instead of a message in the chat.
 function setSupervisor(sv) {
   chat.supervisor = sv ? sv.id : '';
   settings.supervisor = chat.supervisor; saveSettings();
   renderChips();
-  note(sv ? `Supervisor on: ${sv.name} checks every reply before you see it, and sends it back to the AI if it isn't right.`
-    : 'Supervisor off');
+  toast(sv ? `Supervisor on: ${sv.name}` : 'Supervisor off', sv ? 'shieldCheck' : 'shield');
   save();
 }
 // Web search on/off for this chat; also the default for new chats.
@@ -779,7 +779,7 @@ function setWeb(on) {
   chat.web = on;
   settings.web = on; saveSettings();
   renderChips();
-  note(on ? 'Web search on: the AI looks things up online before answering and lists its sources.' : 'Web search off');
+  toast(on ? 'Web search on' : 'Web search off', 'globe');
   save();
 }
 function supervisorPop(pop) {
