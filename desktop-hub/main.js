@@ -35,10 +35,11 @@ function diffCounts(diff) {
 // argument there: cmd.exe would split/interpret it. User text goes over stdin instead.
 // .exe files run directly (arguments pass through untouched); .cmd shims need cmd.exe, which
 // needs paths with spaces quoted.
-function spawnCli(bin, args, cwd) {
+function spawnCli(bin, args, cwd, env) {
   const raw = bin.replace(/^"|"$/g, '');
   const direct = !isWin || /\.exe$/i.test(raw);
-  return spawn(direct ? raw : /\s/.test(raw) ? `"${raw}"` : raw, args, { shell: !direct, cwd: cwd || app.getPath('home') });
+  return spawn(direct ? raw : /\s/.test(raw) ? `"${raw}"` : raw, args,
+    { shell: !direct, cwd: cwd || app.getPath('home'), env: env ? { ...process.env, ...env } : undefined });
 }
 
 function killTree(child) {
@@ -200,16 +201,83 @@ function codexLimits() {
 // would need approval; --auto approves everything not explicitly denied.
 const OPENCODE_ACCESS = { read: ['--agent', 'plan'], edit: [], full: ['--auto'] };
 
-// OpenCode lists ~145 models, most of them image/audio/embedding/safety or small/outdated models.
-// Only these strong chat and coding models are shown (in this order).
-const OPENCODE_PICKS = [
-  'opencode/big-pickle', 'opencode/nemotron-3-ultra-free', 'opencode/ling-3.0-flash-fin-free', 'opencode/mimo-v2.6-flash-free',
-  'google/gemini-3.1-pro-preview', 'google/gemini-3.8-flash',
-  'nvidia/deepseek-ai/deepseek-v4-pro-0813', 'nvidia/deepseek-ai/deepseek-v4-flash-0731',
-  'nvidia/moonshotai/kimi-k3', 'nvidia/z-ai/glm-5.3', 'nvidia/minimaxai/minimax-m3',
-  'nvidia/qwen/qwen3.5-397b-a17b', 'nvidia/qwen/qwen3-coder-480b-a35b-instruct',
-  'nvidia/mistralai/mistral-large-3-675b-instruct-2512', 'nvidia/nvidia/nemotron-3-ultra-550b-a55b', 'nvidia/openai/gpt-oss-120b',
+// --- Picking the best models --------------------------------------------------
+// Model lists are rebuilt on every start from live catalogs, so new releases show up and old
+// ones drop off without an app update. OpenCode lists 100+ models, most of them image/audio/
+// embedding/safety or small/outdated ones; only the strongest current chat models are shown.
+
+// Normalizes an OpenCode model (capabilities.*) or a models.dev model (tool_call, modalities.*).
+function catalogModel(id, m) {
+  const caps = m.capabilities || {};
+  const out = m.modalities ? m.modalities.output || [] : Object.keys(caps.output || {}).filter((k) => caps.output[k]);
+  return { id, name: m.name || id, family: m.family || '', date: m.release_date || '', status: m.status || 'active',
+    tools: m.tool_call !== undefined ? m.tool_call : caps.toolcall !== false, textOnly: out.every((x) => x === 'text'),
+    reasoning: m.reasoning !== undefined ? m.reasoning : !!caps.reasoning, ctx: (m.limit && m.limit.context) || 0,
+    cost: m.cost || null, variants: m.variants || null };
+}
+const SMALL_MODEL = /(^|[-_./ ])(flash|mini|lite|nano|small|haiku|air|fast|turbo|xs|\d{1,2}b)(?=[-_./ ]|$)/i;
+const NOT_CHAT = /embed|guard|safety|rerank|tts|whisper|transcri|image|vision|audio|ocr|reward|moderat/i;
+// Picks the strongest current chat/coding models: tool calling, text output, a usable context, not
+// deprecated, released in the last year. Keeps only the newest of each family (flagship and fast
+// tiers apart, one copy when several providers serve it, free copy preferred), then lists up to
+// `big` flagships followed by up to `small` fast models, each newest first.
+function bestModels(list, big, small) {
+  const usable = list.filter((m) => m.tools && m.textOnly && m.ctx >= 32000 && m.date &&
+    !['deprecated', 'alpha'].includes(m.status) && !NOT_CHAT.test(`${m.id} ${m.name}`));
+  const latest = usable.reduce((d, m) => (m.date > d ? m.date : d), '');
+  const cutoff = latest && new Date(Date.parse(latest) - 365 * 864e5).toISOString().slice(0, 10);
+  const free = (m) => !!m.cost && m.cost.input === 0 && m.cost.output === 0;
+  const tier = (m) => (SMALL_MODEL.test(m.id) ? 'small' : 'big');
+  const best = new Map();
+  for (const m of usable) {
+    if (m.date < cutoff) continue;
+    const family = (m.family || m.name).toLowerCase().replace(/-free$/, '');
+    const key = `${family}|${tier(m)}`;
+    const cur = best.get(key);
+    // Ties: the free copy, then the plain alias over a dated duplicate (claude-haiku-4-5 vs -20251001).
+    if (!cur || m.date > cur.date || (m.date === cur.date && (free(m) - free(cur) || cur.id.length - m.id.length) > 0)) best.set(key, m);
+  }
+  const newest = (a, b) => b.date.localeCompare(a.date);
+  const all = [...best.values()];
+  return [...all.filter((m) => tier(m) === 'big').sort(newest).slice(0, big),
+    ...all.filter((m) => tier(m) === 'small').sort(newest).slice(0, small)];
+}
+
+// The claude CLI has no model-list command, so Claude models come from models.dev (the open
+// catalog OpenCode also uses), fetched on each start and cached for offline starts.
+const catalogFile = () => path.join(dataDir(), 'models-catalog.json');
+let catalog = null;
+async function loadCatalog() {
+  try {
+    const r = await fetch('https://models.dev/api.json', { signal: AbortSignal.timeout(6000) });
+    if (!r.ok) throw new Error(`HTTP ${r.status}`);
+    const all = await r.json();
+    if (!all.anthropic || !all.anthropic.models) throw new Error('No Anthropic models');
+    catalog = { anthropic: all.anthropic.models };
+    fs.writeFileSync(catalogFile(), JSON.stringify(catalog));
+  } catch { catalog = readJson(catalogFile(), catalog); }
+}
+const CLAUDE_FALLBACK = [
+  { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable', efforts: CLAUDE_EFFORTS },
+  { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', efforts: CLAUDE_EFFORTS },
+  { id: 'claude-sonnet-5-5', label: 'Claude Sonnet 5.5 — balanced', efforts: CLAUDE_EFFORTS },
+  { id: 'claude-haiku-5-5', label: 'Claude Haiku 5.5 — fastest', efforts: CLAUDE_EFFORTS },
 ];
+const CLAUDE_ROLES = { opus: 'most capable', sonnet: 'balanced', haiku: 'fastest' };
+function claudeModels() {
+  const list = catalog && Object.values(catalog.anthropic || {})
+    .map((m) => catalogModel(m.id, m)).filter((m) => /^claude-(opus|sonnet|haiku|fable)-/.test(m.id));
+  const best = list && bestModels(list, 6, 2);
+  if (!best || !best.length) return CLAUDE_FALLBACK;
+  const order = ['opus', 'fable', 'sonnet', 'haiku'];
+  const kind = (m) => m.id.split('-')[1];
+  return best.sort((a, b) => order.indexOf(kind(a)) - order.indexOf(kind(b))).map((m) => ({
+    id: m.id, label: `${m.name.startsWith('Claude') ? m.name : `Claude ${m.name}`}${CLAUDE_ROLES[kind(m)] ? ` — ${CLAUDE_ROLES[kind(m)]}` : ''}`,
+    efforts: m.reasoning ? CLAUDE_EFFORTS : undefined,
+    // $ per million tokens, used to estimate supervisor review costs.
+    price: m.cost ? { input: m.cost.input, output: m.cost.output } : undefined,
+  }));
+}
 
 function parseOpencode(o, emit, state) {
   if (o.sessionID && !state.session) { state.session = o.sessionID; emit({ kind: 'session', id: o.sessionID }); }
@@ -258,15 +326,11 @@ const PROVIDERS = {
   claude: {
     label: 'Claude Code',
     bin: 'claude',
-    // The claude CLI has no model-list command, so these are the current full model ids.
-    models: () => [
-      { id: 'claude-opus-5-5', label: 'Claude Opus 5.5 — most capable', efforts: CLAUDE_EFFORTS },
-      { id: 'claude-fable-5-1', label: 'Claude Fable 5.1', efforts: CLAUDE_EFFORTS },
-      { id: 'claude-sonnet-5', label: 'Claude Sonnet 5 — balanced', efforts: CLAUDE_EFFORTS },
-      { id: 'claude-haiku-4-5-20251001', label: 'Claude Haiku 4.5 — fastest' },
-    ],
-    args: ({ model, effort, session, access }) => ['-p', '--output-format', 'stream-json', '--verbose',
+    models: claudeModels,
+    args: ({ model, effort, session, access, web }) => ['-p', '--output-format', 'stream-json', '--verbose',
       '--permission-mode', CLAUDE_ACCESS[access] || 'plan',
+      // -p mode denies tools that would ask for permission, so web search must be allowed up front.
+      ...(web ? ['--allowedTools', 'WebSearch', 'WebFetch'] : []),
       ...(model !== 'default' ? ['--model', model] : []),
       ...(effort ? ['--effort', effort] : []),
       ...(session ? ['--resume', session] : [])],
@@ -318,7 +382,8 @@ const PROVIDERS = {
         defaultEffort: m.default_reasoning_level,
       })),
     // `exec resume` has no --sandbox flag, so the sandbox is set through config for both.
-    args: ({ model, effort, session, access }) => ['exec', ...(session ? ['resume'] : []), '--json', '--skip-git-repo-check',
+    // --search (live web search) is a top-level flag, so it goes before `exec`.
+    args: ({ model, effort, session, access, web }) => [...(web ? ['--search'] : []), 'exec', ...(session ? ['resume'] : []), '--json', '--skip-git-repo-check',
       '-c', `sandbox_mode=${CODEX_ACCESS[access] || 'read-only'}`,
       '-c', 'model_reasoning_summary=detailed',
       ...(model !== 'default' ? ['-m', model] : []),
@@ -331,20 +396,20 @@ const PROVIDERS = {
   opencode: {
     label: 'OpenCode',
     bin: 'opencode',
-    // `--verbose` prints each "provider/model" line followed by its JSON details.
+    // `--verbose` prints each "provider/model" line followed by its JSON details; `--refresh`
+    // first updates OpenCode's model list from models.dev so new releases appear.
     models: () => {
-      const out = [];
-      const re = /^([\w.-]+\/\S+)\r?\n(\{[\s\S]*?\r?\n\})/gm;
-      for (const [, id, json] of run(`${binOf('opencode')} models --verbose`).matchAll(re)) {
-        let m = {};
-        try { m = JSON.parse(json); } catch {}
-        if (m.status && m.status !== 'active') continue;
-        if (!OPENCODE_PICKS.includes(id)) continue;
-        const ctx = m.limit && m.limit.context ? ` · ${Math.round(m.limit.context / 1000)}k ctx` : '';
-        const free = m.cost && m.cost.input === 0 && m.cost.output === 0 ? ' · free' : '';
-        out.push({ id, label: `${m.name || id} (${id})${ctx}${free}`, efforts: Object.keys(m.variants || {}).map((v) => level(v)) });
+      let text;
+      try { text = run(`${binOf('opencode')} models --verbose --refresh`); } catch { text = run(`${binOf('opencode')} models --verbose`); }
+      const all = [];
+      for (const [, id, json] of text.matchAll(/^([\w.-]+\/\S+)\r?\n(\{[\s\S]*?\r?\n\})/gm)) {
+        try { all.push(catalogModel(id, JSON.parse(json))); } catch {}
       }
-      return out.sort((a, b) => OPENCODE_PICKS.indexOf(a.id) - OPENCODE_PICKS.indexOf(b.id));
+      return bestModels(all, 12, 6).map((m) => {
+        const ctx = m.ctx ? ` · ${Math.round(m.ctx / 1000)}k ctx` : '';
+        const free = m.cost && m.cost.input === 0 && m.cost.output === 0 ? ' · free' : '';
+        return { id: m.id, label: `${m.name} (${m.id})${ctx}${free}`, efforts: Object.keys(m.variants || {}).map((v) => level(v)) };
+      });
     },
     args: ({ model, effort, session, access }) => ['run', '--format', 'json', '--thinking',
       ...(OPENCODE_ACCESS[access] || OPENCODE_ACCESS.read),
@@ -456,7 +521,8 @@ function describe(id) {
     command: p.bin, args: p.custom ? (loadSetup().custom.find((c) => c.id === id) || {}).args : undefined,
     guide: INSTALL[id] || null, models: r ? models(p) : [DEFAULT] };
 }
-ipcMain.handle('providers', () => { loadCustom(); return Object.keys(PROVIDERS).map(describe); });
+// Called on every start: re-detects each CLI and rebuilds its list of best models.
+ipcMain.handle('providers', async () => { loadCustom(); await loadCatalog(); return Object.keys(PROVIDERS).map(describe); });
 ipcMain.handle('npmAvailable', () => !!resolveBin('npm'));
 
 ipcMain.handle('providers:setPath', (_e, id, file) => {
@@ -535,7 +601,9 @@ function runTurn(p, msg, emit) {
       args = [...args, ...c.args];
       input = c.input(msg.prompt);
     }
-    const child = spawnCli(binOf(msg.provider), args, msg.cwd && fs.existsSync(msg.cwd) ? msg.cwd : undefined);
+    // OpenCode's web search tool (Exa, no key needed) is only loaded when this is set.
+    const child = spawnCli(binOf(msg.provider), args, msg.cwd && fs.existsSync(msg.cwd) ? msg.cwd : undefined,
+      msg.web ? { OPENCODE_ENABLE_EXA: '1' } : null);
     running = child;
     const state = {};
     let buf = '', errText = '', sawError = false;

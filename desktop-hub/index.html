@@ -172,6 +172,9 @@
   .review-label{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 2px}
   .review-fix,.review-draft{color:var(--mute);font-size:13px;border-left:1px solid var(--line2);padding-left:12px;max-height:320px;overflow:auto}
   #supervisorChip .ic:first-child{color:var(--add)}
+  #webChip{padding-right:11px}
+  #webChip.on{color:var(--fg);background:rgba(122,178,255,.1);border-color:rgba(122,178,255,.28)}
+  #webChip.on .ic{color:#7ab2ff;opacity:1}
   /* Error card: icon, friendly title, raw details, actions */
   .err{display:flex;gap:14px;padding:14px 16px;border-radius:16px;font-size:13px;color:var(--fg2);position:relative;overflow:hidden;
     background:linear-gradient(135deg,rgba(245,154,154,.09),rgba(245,154,154,.02) 45%,rgba(255,255,255,.015));
@@ -534,6 +537,7 @@
         <button type="button" id="modelChip" class="chip"></button>
         <button type="button" id="effortChip" class="chip" hidden></button>
         <button type="button" id="supervisorChip" class="chip" hidden></button>
+        <button type="button" id="webChip" class="chip"></button>
         <span class="sep"></span>
         <button type="button" id="workspaceChip" class="chip"></button>
         <span class="grow"></span>

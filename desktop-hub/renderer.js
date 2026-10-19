@@ -37,6 +37,7 @@ const ICONS = {
   shield: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z',
   shieldCheck: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM8.8 12l2.2 2.2 4.2-4.4',
   shieldX: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM9.5 9.5l5 5M14.5 9.5l-5 5',
+  globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 9h17M3.5 15h17M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9s1.2-6.5 3.6-9z',
 };
 function icon(name, size = 16) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -84,17 +85,33 @@ const APP_COMMANDS = [
   { name: 'help', description: 'List available commands', local: true },
   { name: 'add-supervisor', description: 'A cheap Claude model checks every reply before you see it', local: true },
   { name: 'remove-supervisor', description: 'Turn the supervisor off', local: true },
+  { name: 'web', description: 'Web search on/off: the AI looks things up online before answering', local: true },
 ];
 
-// Supervisor models (run through the Claude Code CLI), cheapest first. Cost is per review,
-// measured on a typical short review (~1k tokens in, ~120 out).
-const SUPERVISORS = [
-  { id: 'haiku-5.5', model: 'claude-haiku-5-5', effort: '', name: 'Haiku 5.5', desc: 'Cheapest · ~$0.0003 per review' },
-  { id: 'haiku-4.5', model: 'claude-haiku-4-5-20251001', effort: '', name: 'Haiku 4.5', desc: 'Very cheap · ~$0.003 per review' },
-  { id: 'sonnet-5.5-low', model: 'claude-sonnet-5-5', effort: 'low', name: 'Sonnet 5.5 · low', desc: 'Cheap and sharp · ~$0.006 per review' },
-  { id: 'opus-5.5-low', model: 'claude-opus-5-5', effort: 'low', name: 'Opus 5.5 · low', desc: 'Smartest reviewer, low thinking keeps it cheap · ~$0.01 per review' },
+// Supervisor models (run through the Claude Code CLI): the newest Haiku, Sonnet and Opus from the
+// Claude model list (rebuilt on each start), at low thinking when the model has thinking levels.
+// Saved by kind ('haiku', 'sonnet', 'opus') so a chat follows new releases.
+const SUPERVISOR_KINDS = [
+  { kind: 'haiku', desc: 'Cheapest' },
+  { kind: 'sonnet', desc: 'Cheap and sharp' },
+  { kind: 'opus', desc: 'Smartest reviewer, low thinking keeps it cheap' },
 ];
-const supervisorOf = (c) => c && c.supervisor && SUPERVISORS.find((s) => s.id === c.supervisor);
+const SUPERVISOR_FALLBACK = { haiku: 'claude-haiku-5-5', sonnet: 'claude-sonnet-5-5', opus: 'claude-opus-5-5' };
+function supervisors() {
+  const claude = providers.find((p) => p.id === 'claude');
+  const models = claude ? claude.models : [];
+  return SUPERVISOR_KINDS.map(({ kind, desc }) => {
+    const m = models.find((x) => x.id.startsWith(`claude-${kind}-`));
+    const effort = !m || (m.efforts && m.efforts.length) ? 'low' : '';
+    // A review is roughly 1.5k tokens in and 300 out (including thinking); price is $ per million.
+    const cost = m && m.price ? (1500 * m.price.input + 300 * m.price.output) / 1e6 : null;
+    const name = (m ? modelName(m).replace(/^Claude /, '') : kind[0].toUpperCase() + kind.slice(1)) + (effort ? ' · low' : '');
+    return { id: kind, model: m ? m.id : SUPERVISOR_FALLBACK[kind], effort, name,
+      desc: cost != null ? `${desc} · ~$${cost.toFixed(cost < 0.001 ? 4 : 3)} per review` : desc };
+  });
+}
+// Older chats saved ids like 'opus-5.5-low'; the part before the first dash is the kind.
+const supervisorOf = (c) => c && c.supervisor && supervisors().find((s) => s.id === c.supervisor.split('-')[0]);
 
 // Workspace = where the AI works and what it may do there:
 //   local  -> whole PC, full access (runs from your home folder)
@@ -125,7 +142,7 @@ const efforts = () => (currentModel() && currentModel().efforts) || [];
 // --- Settings (per-PC preferences, kept in localStorage) -------------------------
 const SETTINGS_KEY = 'onyx.settings';
 const DEFAULT_SETTINGS = { provider: '', workspace: 'local', folder: '', rememberModel: true, models: {},
-  enterToSend: true, expandThinking: false, textSize: 'default', supervisor: '' };
+  enterToSend: true, expandThinking: false, textSize: 'default', supervisor: '', web: false };
 let settings = { ...DEFAULT_SETTINGS };
 try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} applySettings(); }
@@ -143,7 +160,7 @@ function newChat() {
   chat = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: 'New chat',
     created: Date.now(), updated: Date.now(), provider: provider ? provider.id : null,
     workspace: folder ? 'folder' : 'local', cwd: folder || home, file: null, access: folder ? 'edit' : 'full', sessions: {}, messages: [],
-    supervisor: settings.supervisor || '' };
+    supervisor: settings.supervisor || '', web: !!settings.web };
   renderChat(); renderHistory();
   $('in').focus();
 }
@@ -623,6 +640,11 @@ function renderChips() {
   const sv = supervisorOf(chat);
   $('supervisorChip').hidden = !sv;
   if (sv) { chip($('supervisorChip'), 'shieldCheck', sv.name, 'supervisor'); $('supervisorChip').title = `Supervisor: ${sv.name} checks every reply before you see it`; }
+  // Web search is a plain toggle (no menu).
+  const wc = $('webChip');
+  wc.innerHTML = ''; wc.append(icon('globe', 14), h('span', 'chip-text', 'Web'));
+  wc.classList.toggle('on', !!chat.web);
+  wc.title = chat.web ? 'Web search is on: the AI looks things up online. Click to turn off.' : 'Turn on web search';
   const ws = workspace(chat), ro = chat.access === 'read';
   const text = { local: 'Local', folder: base(chat.cwd) || 'Folder', file: base(chat.file) || 'File' }[ws];
   chip($('workspaceChip'), ro ? 'lock' : { local: 'monitor', folder: 'folder', file: 'file' }[ws], text,
@@ -718,10 +740,18 @@ function setSupervisor(sv) {
     : 'Supervisor off');
   save();
 }
+// Web search on/off for this chat; also the default for new chats.
+function setWeb(on) {
+  chat.web = on;
+  settings.web = on; saveSettings();
+  renderChips();
+  note(on ? 'Web search on: the AI looks things up online before answering and lists its sources.' : 'Web search off');
+  save();
+}
 function supervisorPop(pop) {
   pop.append(h('div', 'pop-title', 'Supervisor'));
   const list = h('div', 'opt-list'), cur = supervisorOf(chat);
-  SUPERVISORS.forEach((s) => list.append(option(s.name, s.desc, cur === s, () => { closePop(); setSupervisor(s); }, 'shieldCheck')));
+  supervisors().forEach((s) => list.append(option(s.name, s.desc, !!cur && cur.id === s.id, () => { closePop(); setSupervisor(s); }, 'shieldCheck')));
   if (cur) { list.append(h('div', 'opt-sep')); list.append(option('Off', 'Replies go straight to you', false, () => { closePop(); setSupervisor(null); }, 'x')); }
   pop.append(list);
 }
@@ -1068,6 +1098,7 @@ $('modelChip').onclick = () => openPop($('modelChip'), modelPop, 380);
 $('effortChip').onclick = () => openPop($('effortChip'), effortPop, 320);
 $('workspaceChip').onclick = () => openPop($('workspaceChip'), workspacePop, 360);
 $('supervisorChip').onclick = () => openPop($('supervisorChip'), supervisorPop, 360);
+$('webChip').onclick = () => { if (!busy) setWeb(!chat.web); };
 
 // --- Usage limits -------------------------------------------------------------
 function resetsIn(ms) {
@@ -1169,9 +1200,14 @@ function runLocal(name, arg) {
     setModel(m.id); note(`Model: ${m.label}`);
     return;
   }
+  if (name === 'web') {
+    const a = arg.toLowerCase();
+    setWeb(a === 'on' ? true : a === 'off' ? false : !chat.web);
+    return;
+  }
   if (name === 'add-supervisor') {
     const q = arg.toLowerCase();
-    const s = q && SUPERVISORS.find((x) => x.id.includes(q.replace(/\s+/g, '-')) || x.name.toLowerCase().includes(q));
+    const s = q && supervisors().find((x) => x.id === q.split(/[\s-]/)[0] || x.name.toLowerCase().includes(q));
     if (s) { setSupervisor(s); return; }
     if (q) note(`No supervisor matches "${arg}".`);
     // No (matching) name: pick from the list, anchored to the message box.
@@ -1227,6 +1263,9 @@ $('f').onsubmit = (e) => {
   // File workspace: tell the AI which file this chat is about (not shown in the chat).
   if (!cmd && workspace(chat) === 'file' && chat.file) prompt = `[Focus on this file: ${chat.file}]\n\n${prompt}`;
   if (files.length) prompt += `\n\n[Attached files - read them from disk:]\n${files.map((p) => `- ${p}`).join('\n')}`;
+  // Web search: the CLIs get their search tools enabled; this pushes the AI to actually use them.
+  if (!cmd && chat.web) prompt = '[Web search is on. Search the web before answering: check current facts, versions, ' +
+    "docs, news and prices online instead of relying on memory, and list the links you used at the end.]\n\n" + prompt;
   const lv = efforts().some((x) => x.id === effort) ? effort : '';
 
   if (!chat.messages.length) { chat.title = clip(text.replace(/\s+/g, ' '), 50); $('log').innerHTML = ''; $('title').textContent = chat.title; }
@@ -1244,7 +1283,7 @@ $('f').onsubmit = (e) => {
   setBusy(true);
   const sv = supervisorOf(chat);
   window.hub.send({ provider: provider.id, model: modelId, effort: lv, prompt, cwd: chat.cwd, session, access: chat.access || 'read',
-    command: cmd ? cmd.name : null,
+    command: cmd ? cmd.name : null, web: !!chat.web,
     supervisor: sv && !cmd ? { model: sv.model, effort: sv.effort, label: sv.name } : null,
     // The supervisor sees just this request, not the whole conversation (keeps reviews cheap).
     userText: text + (files.length ? `\n[Attached files: ${files.join(', ')}]` : '') });
