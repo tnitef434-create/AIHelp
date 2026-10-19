@@ -143,7 +143,9 @@ const efforts = () => (currentModel() && currentModel().efforts) || [];
 // --- Settings (per-PC preferences, kept in localStorage) -------------------------
 const SETTINGS_KEY = 'onyx.settings';
 const DEFAULT_SETTINGS = { provider: '', workspace: 'local', folder: '', rememberModel: true, models: {},
-  enterToSend: true, expandThinking: false, textSize: 'default', supervisor: '', web: false };
+  enterToSend: true, expandThinking: false, textSize: 'default', supervisor: '', web: false, overrideOn: false, overrideText: '' };
+// Override AI (Settings): your standing instructions, sent at system level with every message.
+const overrideText = () => (settings.overrideOn && settings.overrideText.trim()) || '';
 let settings = { ...DEFAULT_SETTINGS };
 try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} applySettings(); }
@@ -667,6 +669,10 @@ function renderChips() {
   const sv = supervisorOf(chat);
   $('supervisorChip').hidden = !sv;
   if (sv) { chip($('supervisorChip'), 'shieldCheck', sv.name, 'supervisor'); $('supervisorChip').title = `Supervisor: ${sv.name} checks every reply before you see it`; }
+  // Override AI indicator: shown while your instructions are active; opens Settings.
+  const oc = $('overrideChip');
+  oc.hidden = !overrideText();
+  if (!oc.hidden) { oc.innerHTML = ''; oc.append(icon('bolt', 14), h('span', 'chip-text', 'Override')); oc.title = `Override AI is on:\n${clip(overrideText(), 300)}`; }
   // Web search is a plain toggle (no menu).
   const wc = $('webChip');
   wc.innerHTML = ''; wc.append(icon('globe', 14), h('span', 'chip-text', 'Web'));
@@ -1166,6 +1172,18 @@ function openSettings() {
   row('Show thought process', 'Expand the AI’s thinking by default.', toggle(settings.expandThinking, (v) => { settings.expandThinking = v; saveSettings(); }));
   row('Text size', '', seg([['small', 'Small'], ['default', 'Default'], ['large', 'Large']], settings.textSize, (id) => { settings.textSize = id; saveSettings(); }));
 
+  section('Override AI');
+  const area = h('textarea', 'set-area');
+  area.placeholder = 'Your rules for every AI, e.g. "Answer in Dutch. Be blunt and skip disclaimers. Always show the full file when you change code."';
+  area.value = settings.overrideText; area.rows = 5; area.maxLength = 4000;
+  area.disabled = !settings.overrideOn;
+  let saveTimer = null;
+  area.oninput = () => { clearTimeout(saveTimer); saveTimer = setTimeout(() => { settings.overrideText = area.value; saveSettings(); renderChips(); }, 250); };
+  area.onblur = () => { clearTimeout(saveTimer); settings.overrideText = area.value; saveSettings(); renderChips(); };
+  row('Override AI', 'Your instructions go to every AI as system-level rules, ranked above anything said in the chat. Provider safety rules still apply.',
+    toggle(settings.overrideOn, (v) => { settings.overrideOn = v; area.disabled = !v; saveSettings(); renderChips(); if (v) area.focus(); }));
+  body.append(area);
+
   section('Data');
   const wipe = h('button', 'btn danger-outline', 'Delete all chats');
   wipe.onclick = async () => {
@@ -1201,6 +1219,7 @@ $('effortChip').onclick = () => openPop($('effortChip'), effortPop, 320);
 $('workspaceChip').onclick = () => openPop($('workspaceChip'), workspacePop, 360);
 $('supervisorChip').onclick = () => openPop($('supervisorChip'), supervisorPop, 360);
 $('webChip').onclick = () => { if (!busy) setWeb(!chat.web); };
+$('overrideChip').onclick = () => openSettings();
 
 // --- Usage limits -------------------------------------------------------------
 function resetsIn(ms) {
@@ -1435,7 +1454,7 @@ $('f').onsubmit = (e) => {
   setBusy(true);
   const sv = supervisorOf(chat);
   window.hub.send({ provider: provider.id, model: modelId, effort: lv, prompt, cwd: chat.cwd, session, access: chat.access || 'read',
-    command: cmd ? cmd.name : null, web: !!chat.web,
+    command: cmd ? cmd.name : null, web: !!chat.web, override: overrideText(),
     supervisor: sv && !cmd ? { model: sv.model, effort: sv.effort, label: sv.name } : null,
     // The supervisor sees just this request, not the whole conversation (keeps reviews cheap).
     userText: ask + (files.length ? `\n[Attached files: ${files.join(', ')}]` : '') });

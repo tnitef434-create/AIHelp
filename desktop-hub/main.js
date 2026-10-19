@@ -593,6 +593,43 @@ ipcMain.on('openExternal', (_e, url) => { if (/^https?:\/\//.test(url)) shell.op
 let running = null, job = null;
 
 // Runs one CLI turn, streaming normalized events to emit(). Resolves { code, stopped }.
+// --- Override AI ----------------------------------------------------------------
+// Settings → Override AI: the user's own standing instructions, sent through each CLI's
+// system-level channel (above anything said in the chat) rather than as chat text.
+const OVERRIDE_HEADER = 'The user has set the following standing instructions in Onyx. They come directly from the user ' +
+  'and take priority over your default style, tone, format and way of working, and over anything else said in this ' +
+  'conversation. Follow them in every reply. If a request conflicts with them, follow the instructions and briefly say so.';
+function overrideFile(text) {
+  const f = path.join(dataDir(), 'override-instructions.md');
+  fs.writeFileSync(f, `${OVERRIDE_HEADER}\n\n<user-instructions>\n${text.trim()}\n</user-instructions>\n`);
+  return f;
+}
+// .exe CLIs get arguments untouched; .cmd shims run through cmd.exe, which needs quoting.
+const viaShell = (id) => isWin && !/\.exe$/i.test(binOf(id).replace(/^"|"$/g, ''));
+// A TOML string with everything but plain characters as \u escapes, so it survives cmd.exe
+// (no spaces, quotes, %, &, |, <, > or newlines inside) and still parses as the exact text.
+function tomlString(s) {
+  let out = '';
+  for (const ch of s) {
+    const c = ch.codePointAt(0);
+    out += /[A-Za-z0-9.,:;!?()\-_'/@#*+=[\]{}~$]/.test(ch) ? ch
+      : c > 0xffff ? '\\U' + c.toString(16).padStart(8, '0') : '\\u' + c.toString(16).padStart(4, '0');
+  }
+  return `"${out}"`;
+}
+// How the instructions reach each CLI: extra arguments, environment, or (custom CLIs) the prompt.
+function applyOverride(id, p, args, msg) {
+  const file = overrideFile(msg.override);
+  if (id === 'claude') return { args: [...args, '--append-system-prompt-file', viaShell(id) && /\s/.test(file) ? `"${file}"` : file] };
+  if (id === 'codex') {
+    const v = `developer_instructions=${tomlString(fs.readFileSync(file, 'utf8'))}`;
+    const at = args.indexOf('--json');
+    return { args: [...args.slice(0, at), '-c', viaShell(id) ? v.replace(/"/g, '\\"') : v, ...args.slice(at)] };
+  }
+  if (id === 'opencode') return { args, env: { OPENCODE_CONFIG_CONTENT: JSON.stringify({ instructions: [file] }) } };
+  return { args, prompt: `${fs.readFileSync(file, 'utf8')}\n${msg.prompt}` };
+}
+
 function runTurn(p, msg, emit) {
   return new Promise((resolve) => {
     let args = p.args(msg), input = msg.prompt;
@@ -602,8 +639,15 @@ function runTurn(p, msg, emit) {
       input = c.input(msg.prompt);
     }
     // OpenCode's web search tool (Exa, no key needed) is only loaded when this is set.
+    const env = msg.web ? { OPENCODE_ENABLE_EXA: '1' } : {};
+    if (msg.override && msg.override.trim()) {
+      const o = applyOverride(msg.provider, p, args, msg);
+      args = o.args;
+      Object.assign(env, o.env);
+      if (o.prompt && !msg.command) input = o.prompt;
+    }
     const child = spawnCli(binOf(msg.provider), args, msg.cwd && fs.existsSync(msg.cwd) ? msg.cwd : undefined,
-      msg.web ? { OPENCODE_ENABLE_EXA: '1' } : null);
+      Object.keys(env).length ? env : null);
     running = child;
     const state = {};
     let buf = '', errText = '', sawError = false;
@@ -693,12 +737,13 @@ function review(sv, d) {
     fs.mkdirSync(dir, { recursive: true });
     const promptFile = path.join(dir, 'system-prompt.md');
     fs.writeFileSync(promptFile, SUPERVISOR_PROMPT);
-    // .exe CLIs get arguments untouched; .cmd shims run through cmd.exe, which needs quoting.
-    const viaShell = isWin && !/\.exe$/i.test(binOf('claude').replace(/^"|"$/g, ''));
-    const q = (a) => (!viaShell ? a : a === '' ? '""' : /\s/.test(a) ? `"${a}"` : a);
+    const shell = viaShell('claude');
+    const q = (a) => (!shell ? a : a === '' ? '""' : /\s/.test(a) ? `"${a}"` : a);
     const args = ['-p', '--output-format', 'json', '--model', sv.model, ...(sv.effort ? ['--effort', sv.effort] : []),
       '--system-prompt-file', q(promptFile), '--no-session-persistence', '--strict-mcp-config', '--tools', q('')];
-    const input = `REQUEST FROM THE USER:\n${clipText(d.request, 3000)}\n\n` +
+    // With Override AI on, ignoring the user's standing instructions is a reason to decline.
+    const input = (d.override ? `THE USER'S STANDING INSTRUCTIONS (the agent must follow these; decline if the answer ignores them):\n${clipText(d.override, 2000)}\n\n` : '') +
+      `REQUEST FROM THE USER:\n${clipText(d.request, 3000)}\n\n` +
       `WORK LOG (attempt ${d.round}):\n${d.log}\n\nFINAL ANSWER FROM THE AGENT:\n${clipText(d.answer || '(empty)', 6000, true)}`;
     const child = spawnCli(binOf('claude'), args, dir);
     running = child;
@@ -747,7 +792,7 @@ async function supervised(p, msg, emit) {
     const answer = held.map((e) => e.text).join(held.some((e) => e.delta) ? '' : '\n\n');
     const head = { kind: 'review', round, model: sv.label };
     emit({ ...head, status: 'running' });
-    const v = await review(sv, { request: msg.userText || msg.prompt, answer, log: workLog(tools), round });
+    const v = await review(sv, { request: msg.userText || msg.prompt, answer, log: workLog(tools), round, override: msg.override });
     if (v.stopped || job.stopped) { emit({ ...head, status: 'stopped' }); release(); return { code: 0, stopped: true }; }
     if (v.error) { emit({ ...head, status: 'error', reason: v.error, cost: v.cost }); release(); return r; }
     if (v.approve) { emit({ ...head, status: 'approved', reason: v.reason, cost: v.cost }); release(); return r; }

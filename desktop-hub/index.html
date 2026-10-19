@@ -178,6 +178,8 @@
   .review-fix,.review-draft{color:var(--mute);font-size:13px;border-left:1px solid var(--line2);padding-left:12px;max-height:320px;overflow:auto}
   #supervisorChip .ic:first-child{color:var(--add)}
   #webChip{padding-right:11px}
+  #overrideChip{padding-right:11px;color:#f0c674}
+  #overrideChip .ic{opacity:1}
   #webChip.on{color:var(--fg);background:rgba(122,178,255,.1);border-color:rgba(122,178,255,.28)}
   #webChip.on .ic{color:#7ab2ff;opacity:1}
   /* Error card: icon, friendly title, raw details, actions */
@@ -389,6 +391,11 @@
   .set-row:last-child{border-bottom:0}
   .set-text{display:flex;flex-direction:column;gap:2px;min-width:0}
   .set-text b{font-weight:550;font-size:13.5px}
+  .set-area{display:block;width:100%;margin:10px 0 4px;resize:vertical;min-height:96px;max-height:320px;padding:10px 12px;border-radius:12px;
+    background:var(--s2);border:1px solid var(--line2);outline:none;font:13px/1.6 var(--font);color:var(--fg);transition:border-color .15s,opacity .2s}
+  .set-area:focus{border-color:var(--line3)}
+  .set-area:disabled{opacity:.45;cursor:not-allowed}
+  .set-area::placeholder{color:var(--faint)}
   .set-text span{color:var(--mute);font-size:12px;line-height:1.5}
   .set-seg{margin:0;flex:none}
   .set-seg .seg-btn{padding:0 12px;flex:none;font-size:12px}
@@ -570,6 +577,7 @@
         <button type="button" id="effortChip" class="chip" hidden></button>
         <button type="button" id="supervisorChip" class="chip" hidden></button>
         <button type="button" id="webChip" class="chip"></button>
+        <button type="button" id="overrideChip" class="chip" hidden></button>
         <span class="sep"></span>
         <button type="button" id="workspaceChip" class="chip"></button>
         <span class="grow"></span>
