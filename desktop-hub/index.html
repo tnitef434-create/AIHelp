@@ -8,6 +8,8 @@
     --fg:#f5f5f5;--fg2:#c8c8c8;--mute:#8c8c8c;--faint:#555;
     --add:#86e0a5;--del:#f59a9a;
     --ease:cubic-bezier(.2,.8,.2,1);
+    /* Entrances: a soft deceleration with no overshoot. */
+    --ease-out:cubic-bezier(.16,1,.3,1);
     --font:"Inter","Segoe UI Variable Display","Segoe UI Variable Text","Segoe UI",system-ui,sans-serif;
     --mono:"JetBrains Mono","Cascadia Code","Cascadia Mono",Consolas,ui-monospace,monospace;
     --bar:56px;
@@ -54,7 +56,7 @@
   #newChat{color:var(--fg);font-weight:550}
   #newChat:hover,.side-search:hover{background:rgba(255,255,255,.06)}
   #newChat .ni{width:24px;height:24px;border-radius:50%;background:#fff;color:#000;display:grid;place-items:center;flex:none;
-    box-shadow:0 2px 10px rgba(255,255,255,.18);transition:transform .25s var(--ease)}
+    transition:transform .3s var(--ease-out)}
   #newChat:hover .ni{transform:rotate(90deg)}
   #newChat span{flex:1;text-align:left}
   kbd{font:500 10.5px var(--font);padding:2px 6px;border-radius:6px;letter-spacing:.02em}
@@ -107,15 +109,15 @@
     transition:background .6s}
   #usageRing.hot{background:conic-gradient(var(--del) calc(var(--p)*1%),#262626 0)}
 
-  #scroll{flex:1;overflow:auto;min-height:0;scroll-behavior:smooth}
+  #scroll{flex:1;overflow:auto;min-height:0}
+  #log.swap{animation:fade .24s ease-out}
   #log{max-width:800px;margin:0 auto;padding:18px 32px 40px;display:flex;flex-direction:column;gap:28px;min-height:100%}
 
   /* Hero / empty state */
   .hero{margin:auto 0;padding:40px 0 12px;display:flex;flex-direction:column;align-items:center;text-align:center;animation:rise .5s var(--ease)}
   .orb{width:64px;height:64px;border-radius:15px;background:#fff;display:grid;place-items:center;margin-bottom:26px;position:relative;
-    box-shadow:0 0 0 1px rgba(255,255,255,.25),0 20px 60px rgba(255,255,255,.12),0 0 120px rgba(255,255,255,.08)}
+    box-shadow:0 0 0 1px rgba(255,255,255,.18),0 20px 60px rgba(255,255,255,.06)}
   .orb::before{content:'';position:absolute;inset:-18px;border-radius:30px;border:1px solid rgba(255,255,255,.06)}
-  .orb::after{content:'';position:absolute;inset:-36px;border-radius:42px;border:1px solid rgba(255,255,255,.03)}
   .orb{background:transparent}.orb img{width:64px;height:64px;display:block;border-radius:15px}
   .hero h2{margin:0;font-size:34px;font-weight:650;letter-spacing:-.035em;line-height:1.15;
     background:linear-gradient(180deg,#fff 30%,#9a9a9a);-webkit-background-clip:text;background-clip:text;color:transparent}
@@ -125,18 +127,20 @@
   .card{display:flex;flex-direction:column;align-items:flex-start;gap:4px;text-align:left;padding:16px 16px 15px;border-radius:16px;
     background:linear-gradient(180deg,var(--s2),var(--s1));border:1px solid var(--line);color:var(--mute);font-size:12.5px;line-height:1.5;
     transition:border-color .2s,transform .25s var(--ease),background .2s}
-  .card:hover{border-color:var(--line3);transform:translateY(-2px);background:linear-gradient(180deg,var(--s3),var(--s2))}
+  .card:hover{border-color:var(--line2);transform:translateY(-1px);background:linear-gradient(180deg,var(--s3),var(--s2))}
   .card b{color:var(--fg);font-weight:600;font-size:13.5px}
   .card-ic{width:32px;height:32px;border-radius:10px;display:grid;place-items:center;background:var(--s4);color:var(--fg);
     border:1px solid var(--line2);margin-bottom:8px}
 
-  @keyframes rise{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
-  .msg{animation:rise .35s var(--ease);overflow-wrap:anywhere}
-  .user{align-self:flex-end;max-width:80%;background:#fff;color:#0a0a0a;padding:11px 17px;border-radius:20px 20px 6px 20px;
-    box-shadow:0 10px 30px rgba(255,255,255,.05)}
+  @keyframes rise{from{opacity:0;transform:translateY(4px)}to{opacity:1;transform:none}}
+  /* Only newly arrived messages and blocks get .in; saved chats open without motion. */
+  .msg{overflow-wrap:anywhere}
+  .in{animation:rise .34s var(--ease-out) both}
+  .user{align-self:flex-end;max-width:80%;background:#171717;color:var(--fg);padding:10px 16px;border-radius:18px 18px 6px 18px;
+    border:1px solid var(--line2);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .user .text{white-space:pre-wrap;line-height:1.55}
-  .user code{background:rgba(0,0,0,.07);border-color:rgba(0,0,0,.08)!important;color:#000}
-  .user a{color:#000}
+  .user code{background:rgba(255,255,255,.06);border-color:var(--line2)!important;color:var(--fg)}
+  .user a{color:#fff}
   .ai{display:flex;flex-direction:column;gap:12px}
   .ai-head{display:flex;align-items:center;gap:10px;font-size:13px}
   .ai-head .mark{width:24px;height:24px;border-radius:8px;font-size:12px}
@@ -154,21 +158,22 @@
   .note{align-self:center;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);white-space:pre-wrap;
     border:1px solid var(--line);background:var(--s1);border-radius:12px;padding:8px 14px;max-width:100%}
   /* Supervisor verdict card (approved / declined / checking) */
-  .review{display:flex;gap:12px;padding:12px 14px;border-radius:14px;font-size:13px;color:var(--fg2);position:relative;overflow:hidden;
-    border:1px solid var(--line);background:linear-gradient(135deg,var(--tint,rgba(255,255,255,.04)),rgba(255,255,255,.01) 50%);animation:rise .3s var(--ease)}
-  .review::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:2.5px;border-radius:0 3px 3px 0;background:var(--rc,var(--mute))}
-  .review.approved{--rc:var(--add);--tint:rgba(134,224,165,.08);border-color:rgba(134,224,165,.2)}
-  .review.declined{--rc:var(--del);--tint:rgba(245,154,154,.08);border-color:rgba(245,154,154,.2)}
-  .review.error{--rc:#e8c37a;--tint:rgba(232,195,122,.07);border-color:rgba(232,195,122,.18)}
-  .review-ic{width:28px;height:28px;border-radius:9px;flex:none;display:grid;place-items:center;color:var(--rc,var(--mute));
-    background:rgba(255,255,255,.04);border:1px solid var(--line)}
-  .review-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
-  .review-main>b{color:var(--fg);font-weight:600;font-size:13.5px;letter-spacing:-.01em}
-  .review-reason{color:var(--fg2);overflow-wrap:anywhere}
-  .review-meta{color:var(--faint);font-size:11.5px;margin-top:4px}
-  .review-more{margin-top:6px}
-  .review-more>summary{cursor:pointer;color:var(--mute);font-size:12px;width:fit-content}
-  .review-more>summary:hover{color:var(--fg)}
+  /* A quiet row: colored icon, one-line title with model/cost, muted reason. */
+  .review{display:flex;gap:10px;padding:10px 14px;border-radius:12px;font-size:12.5px;color:var(--fg2);
+    border:1px solid var(--line);background:rgba(255,255,255,.012);transition:border-color .3s}
+  .review.approved{--rc:var(--add);border-color:rgba(134,224,165,.13)}
+  .review.declined{--rc:var(--del);border-color:rgba(245,154,154,.15)}
+  .review.error{--rc:#e8c37a;border-color:rgba(232,195,122,.14)}
+  .review-ic{flex:none;margin-top:2px;color:var(--rc,var(--mute))}
+  .review-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+  .review-head{display:flex;align-items:baseline;gap:10px;min-width:0}
+  .review-head b{color:var(--fg2);font-weight:550;font-size:13px;letter-spacing:-.005em}
+  .review.declined .review-head b{color:var(--fg)}
+  .review-reason{color:var(--mute);overflow-wrap:anywhere;line-height:1.55}
+  .review-meta{margin-left:auto;color:var(--faint);font-size:11.5px;white-space:nowrap;font-variant-numeric:tabular-nums}
+  .review-more{margin-top:4px}
+  .review-more>summary{cursor:pointer;color:var(--faint);font-size:12px;width:fit-content;transition:color .15s}
+  .review-more>summary:hover{color:var(--fg2)}
   .review-label{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 2px}
   .review-fix,.review-draft{color:var(--mute);font-size:13px;border-left:1px solid var(--line2);padding-left:12px;max-height:320px;overflow:auto}
   #supervisorChip .ic:first-child{color:var(--add)}
@@ -178,7 +183,7 @@
   /* Error card: icon, friendly title, raw details, actions */
   .err{display:flex;gap:14px;padding:14px 16px;border-radius:16px;font-size:13px;color:var(--fg2);position:relative;overflow:hidden;
     background:linear-gradient(135deg,rgba(245,154,154,.09),rgba(245,154,154,.02) 45%,rgba(255,255,255,.015));
-    border:1px solid rgba(245,154,154,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.04);animation:rise .3s var(--ease)}
+    border:1px solid rgba(245,154,154,.18);box-shadow:inset 0 1px 0 rgba(255,255,255,.04)}
   .err::before{content:'';position:absolute;left:0;top:14px;bottom:14px;width:2.5px;border-radius:0 3px 3px 0;background:var(--del)}
   .err-ic{width:32px;height:32px;border-radius:10px;flex:none;display:grid;place-items:center;color:var(--del);
     background:rgba(245,154,154,.1);border:1px solid rgba(245,154,154,.22)}
@@ -208,7 +213,7 @@
   .text hr{border:0;border-top:1px solid var(--line2);margin:12px 0}
   .text a{color:#fff;text-decoration:underline;text-decoration-color:var(--faint);text-underline-offset:3px;transition:text-decoration-color .15s}
   .text a:hover{text-decoration-color:#fff}
-  strong{font-weight:650;color:#fff}.user strong{color:#000}
+  strong{font-weight:650;color:#fff}
 
   /* Thought process + activity */
   details>summary{list-style:none;cursor:pointer;user-select:none}
@@ -234,11 +239,13 @@
   .acts-dot.live{opacity:1;animation:pulse 1.2s ease-in-out infinite;box-shadow:0 0 0 4px rgba(255,255,255,.08)}
   @keyframes pulse{50%{opacity:.3}}
   .acts .rows{border-top:1px solid var(--line);padding:8px 8px 8px;display:flex;flex-direction:column;gap:1px}
+  /* Expanding a section eases its content in. */
+  .acts[open]>.rows,.review-more[open]>:not(summary){animation:fade .22s ease-out}
   .tool-sum{display:flex;align-items:center;gap:8px;min-height:32px;padding:4px 8px;border-radius:8px;font-size:12.5px;color:var(--fg2)}
   details.tool>summary:hover{background:var(--s3)}
   .tool-st{width:14px;height:14px;border-radius:50%;flex:none;border:1.5px solid var(--faint);position:relative}
-  .tool-st.done{border-color:transparent;background:#fff}
-  .tool-st.done::after{content:'';position:absolute;left:4px;top:1.5px;width:3.5px;height:6.5px;border:solid #000;border-width:0 1.6px 1.6px 0;transform:rotate(45deg)}
+  .tool-st.done{border-color:var(--line2);background:var(--s4)}
+  .tool-st.done::after{content:'';position:absolute;left:3.5px;top:1px;width:3.5px;height:6.5px;border:solid var(--fg2);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
   .tool-st.running{border-color:#3a3a3a;border-top-color:#fff;animation:spin .8s linear infinite}
   .tool-st.error{border-color:var(--del);background:rgba(245,154,154,.15)}
   @keyframes spin{to{transform:rotate(360deg)}}
@@ -273,8 +280,8 @@
   /* Send: round, dim until there is something to send, animated ring while running. */
   #go{width:38px;height:38px;border-radius:50%;background:#222;color:#6a6a6a;display:grid;place-items:center;position:relative;
     transition:background .25s var(--ease),color .25s,transform .2s var(--ease),box-shadow .25s}
-  .composer.ready #go{background:#fff;color:#000;box-shadow:0 0 0 4px rgba(255,255,255,.08),0 8px 24px rgba(255,255,255,.18)}
-  .composer.ready #go:hover{transform:translateY(-1px) scale(1.04)}
+  .composer.ready #go{background:#fff;color:#000;box-shadow:0 0 0 4px rgba(255,255,255,.05)}
+  .composer.ready #go:hover{transform:scale(1.03)}
   #go:active{transform:scale(.92)!important}
   #go .ic{transition:transform .25s var(--ease)}
   .composer.ready #go:hover .ic{transform:translateY(-1px)}
@@ -298,7 +305,9 @@
 
   /* ============ Popovers ============ */
   @keyframes pop{from{opacity:0;transform:translateY(6px) scale(.98)}to{opacity:1;transform:none}}
-  #pop{position:fixed;z-index:10;max-height:min(460px,calc(100vh - 80px));display:flex;flex-direction:column;background:rgba(12,12,12,.97);
+  @keyframes popout{to{opacity:0;transform:translateY(3px) scale(.985)}}
+  .pop-ghost{animation:popout .15s ease-in forwards!important;pointer-events:none}
+  #pop,.pop-ghost{position:fixed;z-index:10;max-height:min(460px,calc(100vh - 80px));display:flex;flex-direction:column;background:rgba(12,12,12,.97);
     backdrop-filter:blur(24px);border:1px solid var(--line2);border-radius:18px;padding:6px;box-shadow:0 30px 80px rgba(0,0,0,.9),inset 0 1px 0 rgba(255,255,255,.04);
     animation:pop .18s var(--ease);transform-origin:bottom left}
   #pop.below{transform-origin:top right}
@@ -454,8 +463,8 @@
   .hero-pill .ic{margin-left:3px;color:var(--mute)}
 
   /* Your messages: hover actions */
-  .user-wrap{align-self:flex-end;display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:80%;animation:rise .35s var(--ease)}
-  .user-wrap .user{max-width:100%;animation:none}
+  .user-wrap{align-self:flex-end;display:flex;flex-direction:column;align-items:flex-end;gap:4px;max-width:80%}
+  .user-wrap .user{max-width:100%}
   .user-acts{display:flex;gap:2px;opacity:0;transition:opacity .2s}
   .user-wrap:hover .user-acts{opacity:1}
   .time{color:var(--faint);opacity:0;transition:opacity .2s}
@@ -484,8 +493,7 @@
   .att button{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:var(--mute)}
   .att button:hover{background:rgba(255,255,255,.08);color:#fff}
   .user .atts{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:6px}
-  .user .att{background:rgba(0,0,0,.06);border-color:rgba(0,0,0,.1);color:#000;height:30px;animation:none}
-  .user .att .att-ic{background:#000;color:#fff}
+  .user .att{background:rgba(255,255,255,.04);border-color:var(--line2);color:var(--fg);height:30px;animation:none}
   #dropzone{position:fixed;inset:0;z-index:40;display:grid;place-items:center;background:rgba(0,0,0,.72);backdrop-filter:blur(8px);animation:fade .15s}
   .drop-card{width:min(420px,80vw);padding:40px 28px;border-radius:26px;border:1.5px dashed rgba(255,255,255,.35);display:flex;flex-direction:column;
     align-items:center;gap:6px;text-align:center;background:rgba(255,255,255,.03);pointer-events:none}
@@ -504,6 +512,10 @@
   .bar{height:6px;background:#1c1c1c;border-radius:6px;margin-top:8px;overflow:hidden}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,#9a9a9a,#fff);border-radius:6px;transition:width .8s var(--ease)}
   .bar i.warn{background:linear-gradient(90deg,#8a8a8a,#d8d8d8)}.bar i.bad{background:var(--del)}
+  /* Respect "reduce motion" in Windows/macOS settings. */
+  @media (prefers-reduced-motion:reduce){
+    *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
+  }
 </style></head>
 <body>
 <aside id="side">

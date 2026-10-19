@@ -440,16 +440,21 @@ function reviewCard(r, m, key) {
   const status = r.status === 'running' && m.status !== 'running' ? 'stopped' : r.status;
   const card = h('div', 'review ' + status);
   const ic = h('div', 'review-ic');
-  ic.append(icon(status === 'approved' ? 'shieldCheck' : status === 'declined' ? 'shieldX' : 'shield', 16));
+  ic.append(icon(status === 'approved' ? 'shieldCheck' : status === 'declined' ? 'shieldX' : 'shield', 15));
   const main = h('div', 'review-main');
   const title = {
     running: `Supervisor is checking the work${r.round > 1 ? ` (attempt ${r.round})` : ''}`,
-    approved: r.round > 1 ? `Supervisor approved on attempt ${r.round}` : 'Supervisor approved',
-    declined: r.final ? `Supervisor declined again, showing the last attempt anyway` : `Supervisor declined, sent back to fix`,
+    approved: r.round > 1 ? `Approved on attempt ${r.round}` : 'Approved by supervisor',
+    declined: r.final ? 'Declined again, showing the last attempt anyway' : 'Declined, sent back to fix',
     error: "Supervisor couldn't review this reply",
     stopped: 'Review stopped',
   }[status] || 'Supervisor';
-  main.append(h('b', status === 'running' ? 'shimmer' : '', title));
+  // Title and model/cost share one line; the reason sits quietly underneath.
+  const head = h('div', 'review-head');
+  head.append(h('b', status === 'running' ? 'shimmer' : '', title));
+  const meta = [r.model, typeof r.cost === 'number' && `$${r.cost.toFixed(4)}`].filter(Boolean).join(' · ');
+  if (meta) head.append(h('span', 'review-meta', meta));
+  main.append(head);
   if (r.reason) main.append(h('span', 'review-reason', r.reason));
   if (status === 'declined' && (r.fix || r.draft)) {
     const d = h('details', 'review-more'); d.dataset.key = key + 'm';
@@ -458,8 +463,6 @@ function reviewCard(r, m, key) {
     if (r.draft) { d.append(h('div', 'review-label', 'Declined draft')); d.append(markdown(r.draft, 'review-draft')); }
     main.append(d);
   }
-  const meta = [r.model, typeof r.cost === 'number' && `$${r.cost.toFixed(4)}`].filter(Boolean).join('  ·  ');
-  if (meta) main.append(h('span', 'review-meta', meta));
   card.append(ic, main);
   return card;
 }
@@ -467,33 +470,39 @@ function reviewCard(r, m, key) {
 function renderAssistant(m, el) {
   // Keep expanded sections open across re-renders while streaming.
   const open = new Set([...el.querySelectorAll('details[open]')].map((d) => d.dataset.key));
+  // The message is rebuilt on every streamed event; only blocks that are new since the last
+  // render get the entrance animation, so earlier ones stay still.
+  const seen = el._seen || (el._seen = new Set());
+  const live = m.status === 'running';
   el.innerHTML = '';
   el.append(messageHead(m));
   const body = h('div', 'ai-body');
+  const add = (key, node) => { if (live && !seen.has(key)) node.classList.add('in'); seen.add(key); body.append(node); };
   const { blocks, usage } = toBlocks(m.events);
   blocks.forEach((b, i) => {
     const key = 'b' + i;
     if (b.type === 'think') {
       const d = h('details', 'think'); d.dataset.key = key;
-      const live = m.status === 'running' && i === blocks.length - 1;
-      const s = h('summary'); s.append(icon('brain', 14), h('span', live ? 'shimmer' : '', live ? 'Thinking' : 'Thought process'));
+      const thinking = live && i === blocks.length - 1;
+      const s = h('summary'); s.append(icon('brain', 14), h('span', thinking ? 'shimmer' : '', thinking ? 'Thinking' : 'Thought process'));
       d.append(s, markdown(b.text, 'body'));
       if (settings.expandThinking) d.open = true;
-      body.append(d);
+      add(key, d);
     } else if (b.type === 'acts') {
       const d = h('details', 'acts'); d.dataset.key = key;
       const s = h('summary'); actsSummary(b.tools, s);
       const rows = h('div', 'rows'); b.tools.forEach((t) => rows.append(toolRow(t)));
-      d.append(s, rows); body.append(d);
-    } else if (b.type === 'text') body.append(markdown(b.text));
-    else if (b.type === 'review') body.append(reviewCard(b, m, key));
-    else if (b.type === 'error') body.append(errorCard(b.text, m));
+      d.append(s, rows); add(key, d);
+    } else if (b.type === 'text') add(key, markdown(b.text));
+    else if (b.type === 'review') add(key, reviewCard(b, m, key));
+    else if (b.type === 'error') add(key, errorCard(b.text, m));
   });
-  if (m.status === 'running' && !blocks.length) { const w = h('div', 'working'); w.append(h('span', 'shimmer', 'Working')); body.append(w); }
+  if (live && !blocks.length) { const w = h('div', 'working'); w.append(h('span', 'shimmer', 'Working')); add('working', w); }
   el.append(body);
   const foot = h('div', 'foot');
   if (m.status === 'stopped') foot.append(h('span', 'pill', 'Stopped'));
-  if (usage) {
+  // Token counts arrive per turn; show them once the whole reply is done.
+  if (usage && !live) {
     const bits = [`${fmtNum(usage.input)} in`];
     if (usage.cached) bits.push(`${fmtNum(usage.cached)} cached`);
     bits.push(`${fmtNum(usage.output)} out`);
@@ -507,11 +516,14 @@ function renderAssistant(m, el) {
     const t = h('span', 'time', new Date(m.at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
     t.title = new Date(m.at).toLocaleString(); foot.append(t);
   }
-  if (foot.childNodes.length) el.append(foot);
+  // The footer fades in when a live reply finishes.
+  if (foot.childNodes.length) { if (!live && el._wasLive) foot.classList.add('in'); el.append(foot); }
+  el._wasLive = live;
   el.querySelectorAll('details').forEach((d) => { if (open.has(d.dataset.key)) d.open = true; });
 }
 
-function renderMessage(m) {
+// animate: play the entrance animation (new messages only, not when a saved chat is opened).
+function renderMessage(m, animate = false) {
   let el;
   if (m.role === 'user') {
     el = h('div', 'msg user');
@@ -530,8 +542,16 @@ function renderMessage(m) {
   }
   else if (m.role === 'note') { el = h('div', 'msg note'); el.append(icon('spark', 14), h('span', '', m.text)); }
   else { el = h('div', 'msg ai'); renderAssistant(m, el); }
+  if (animate) el.classList.add('in');
   $('log').append(el);
   return el;
+}
+
+// Instant jump to the newest message (opening a chat, sending); the "jump to latest" button scrolls smoothly.
+function toEnd() { $('scroll').scrollTop = 1e9; updateToBottom(); }
+function updateToBottom() {
+  const s = $('scroll');
+  $('toBottom').classList.toggle('show', s.scrollHeight - s.scrollTop - s.clientHeight > 240);
 }
 
 // Starter prompts per workspace. Local ones work across the whole PC and report or propose
@@ -586,8 +606,10 @@ function renderEmpty() {
 function renderChat() {
   $('log').innerHTML = '';
   if (!chat.messages.length) renderEmpty();
-  chat.messages.forEach(renderMessage);
-  $('scroll').scrollTop = 1e9;
+  chat.messages.forEach((m) => renderMessage(m));
+  // Fade the whole chat in once instead of animating every message.
+  $('log').classList.remove('swap'); void $('log').offsetWidth; $('log').classList.add('swap');
+  toEnd();
   $('title').textContent = chat.title;
   renderChips();
 }
@@ -595,7 +617,7 @@ function renderChat() {
 // Notes are shown but never saved or sent to the AI.
 function note(text) {
   const e = $('log').querySelector('.hero'); if (e) e.remove();
-  renderMessage({ role: 'note', text }); $('scroll').scrollTop = 1e9;
+  renderMessage({ role: 'note', text }, true); toEnd();
 }
 
 // --- Provider / model / thinking / access / folder ------------------------------
@@ -658,7 +680,19 @@ function renderChips() {
 
 // --- Popovers -------------------------------------------------------------------
 let popAnchor = null;
-function closePop() { $('pop').hidden = true; $('pop').innerHTML = ''; if (popAnchor) popAnchor.classList.remove('open'); popAnchor = null; }
+function closePop() {
+  const pop = $('pop');
+  // A static copy fades out in its place, so the real popover is free to reopen at once.
+  if (!pop.hidden) {
+    const ghost = pop.cloneNode(true);
+    ghost.removeAttribute('id'); ghost.classList.add('pop-ghost');
+    document.body.append(ghost);
+    setTimeout(() => ghost.remove(), 160);
+  }
+  pop.hidden = true; pop.innerHTML = '';
+  if (popAnchor) popAnchor.classList.remove('open');
+  popAnchor = null;
+}
 function openPop(anchor, build, width = 320) {
   if (popAnchor === anchor) { closePop(); return; }
   closePop();
@@ -1271,14 +1305,14 @@ $('f').onsubmit = (e) => {
   if (!chat.messages.length) { chat.title = clip(text.replace(/\s+/g, ' '), 50); $('log').innerHTML = ''; $('title').textContent = chat.title; }
   const userMsg = { role: 'user', text, files, at: Date.now() };
   attachments = []; renderAttachments();
-  chat.messages.push(userMsg); renderMessage(userMsg);
+  chat.messages.push(userMsg); renderMessage(userMsg, true);
   Object.assign(chat, { provider: provider.id, model: modelId, effort: lv });
   liveMsg = { role: 'assistant', provider: provider.id, events: [], status: 'running', at: Date.now(),
     model: [modelName(currentModel()), lv && `${lv} thinking`].filter(Boolean).join(' · '),
     tag: [provider.label, modelName(currentModel()), lv && `thinking: ${lv}`].filter(Boolean).join(' · ') };
   chat.messages.push(liveMsg);
-  liveEl = renderMessage(liveMsg);
-  $('in').value = ''; autosize(); $('scroll').scrollTop = 1e9;
+  liveEl = renderMessage(liveMsg, true);
+  $('in').value = ''; autosize(); toEnd();
   save();
   setBusy(true);
   const sv = supervisorOf(chat);
@@ -1317,11 +1351,8 @@ $('title').onclick = () => {
 };
 
 // Floating "jump to latest" button when scrolled away from the bottom.
-$('scroll').addEventListener('scroll', () => {
-  const s = $('scroll');
-  $('toBottom').classList.toggle('show', s.scrollHeight - s.scrollTop - s.clientHeight > 240);
-});
-$('toBottom').onclick = () => { $('scroll').scrollTop = 1e9; };
+$('scroll').addEventListener('scroll', updateToBottom, { passive: true });
+$('toBottom').onclick = () => { $('scroll').scrollTo({ top: $('scroll').scrollHeight, behavior: 'smooth' }); };
 
 const toggleSide = () => document.body.classList.toggle('collapsed');
 $('sideToggle').onclick = toggleSide;
