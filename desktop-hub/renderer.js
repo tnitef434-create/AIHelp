@@ -34,6 +34,9 @@ const ICONS = {
   upload: 'M12 16V4M6 10l6-6 6 6M4 20h16',
   file: 'M6 3h8l4 4v14H6zM14 3v4h4',
   alert: 'M12 4L2.5 20h19zM12 10v4.5M12 17.5v.01',
+  shield: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z',
+  shieldCheck: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM8.8 12l2.2 2.2 4.2-4.4',
+  shieldX: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM9.5 9.5l5 5M14.5 9.5l-5 5',
 };
 function icon(name, size = 16) {
   const ns = 'http://www.w3.org/2000/svg';
@@ -79,7 +82,19 @@ const APP_COMMANDS = [
   { name: 'model', description: 'Switch model: /model <name or id>', local: true },
   { name: 'effort', description: 'Set thinking level: /effort <level>', local: true },
   { name: 'help', description: 'List available commands', local: true },
+  { name: 'add-supervisor', description: 'A cheap Claude model checks every reply before you see it', local: true },
+  { name: 'remove-supervisor', description: 'Turn the supervisor off', local: true },
 ];
+
+// Supervisor models (run through the Claude Code CLI), cheapest first. Cost is per review,
+// measured on a typical short review (~1k tokens in, ~120 out).
+const SUPERVISORS = [
+  { id: 'haiku-5.5', model: 'claude-haiku-5-5', effort: '', name: 'Haiku 5.5', desc: 'Cheapest · ~$0.0003 per review' },
+  { id: 'haiku-4.5', model: 'claude-haiku-4-5-20251001', effort: '', name: 'Haiku 4.5', desc: 'Very cheap · ~$0.003 per review' },
+  { id: 'sonnet-5.5-low', model: 'claude-sonnet-5-5', effort: 'low', name: 'Sonnet 5.5 · low', desc: 'Cheap and sharp · ~$0.006 per review' },
+  { id: 'opus-5.5-low', model: 'claude-opus-5-5', effort: 'low', name: 'Opus 5.5 · low', desc: 'Smartest reviewer, low thinking keeps it cheap · ~$0.01 per review' },
+];
+const supervisorOf = (c) => c && c.supervisor && SUPERVISORS.find((s) => s.id === c.supervisor);
 
 // Workspace = where the AI works and what it may do there:
 //   local  -> whole PC, full access (runs from your home folder)
@@ -110,7 +125,7 @@ const efforts = () => (currentModel() && currentModel().efforts) || [];
 // --- Settings (per-PC preferences, kept in localStorage) -------------------------
 const SETTINGS_KEY = 'onyx.settings';
 const DEFAULT_SETTINGS = { provider: '', workspace: 'local', folder: '', rememberModel: true, models: {},
-  enterToSend: true, expandThinking: false, textSize: 'default' };
+  enterToSend: true, expandThinking: false, textSize: 'default', supervisor: '' };
 let settings = { ...DEFAULT_SETTINGS };
 try { settings = { ...DEFAULT_SETTINGS, ...JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}') }; } catch {}
 function saveSettings() { try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {} applySettings(); }
@@ -127,7 +142,8 @@ function newChat() {
   const folder = settings.workspace === 'folder' && settings.folder;
   chat = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 6), title: 'New chat',
     created: Date.now(), updated: Date.now(), provider: provider ? provider.id : null,
-    workspace: folder ? 'folder' : 'local', cwd: folder || home, file: null, access: folder ? 'edit' : 'full', sessions: {}, messages: [] };
+    workspace: folder ? 'folder' : 'local', cwd: folder || home, file: null, access: folder ? 'edit' : 'full', sessions: {}, messages: [],
+    supervisor: settings.supervisor || '' };
   renderChat(); renderHistory();
   $('in').focus();
 }
@@ -283,7 +299,7 @@ const VERB = { read: 'Read', edit: 'Edited', write: 'Created', delete: 'Deleted'
 // Merge the raw event stream into display blocks: thought process, grouped tool activity,
 // answer text, errors and a usage footer. Tool updates (same id) merge into the first entry.
 function toBlocks(events) {
-  const blocks = [], tools = {};
+  const blocks = [], tools = {}, reviews = {};
   let usage = null;
   const last = () => blocks[blocks.length - 1];
   for (const ev of events) {
@@ -296,6 +312,10 @@ function toBlocks(events) {
     } else if (ev.kind === 'text') {
       // delta = a streamed chunk of the same answer (custom CLIs), joined without a paragraph break.
       if (last() && last().type === 'text') last().text += (ev.delta ? '' : '\n\n') + ev.text; else blocks.push({ type: 'text', text: ev.text });
+    } else if (ev.kind === 'review') {
+      // One card per review round; its 'running' event is updated in place by the verdict.
+      if (reviews[ev.round]) Object.assign(reviews[ev.round], ev);
+      else blocks.push(reviews[ev.round] = { ...ev, type: 'review' });
     } else if (ev.kind === 'error') blocks.push({ type: 'error', text: ev.text });
     else if (ev.kind === 'usage') usage = ev;
   }
@@ -396,6 +416,37 @@ function errorCard(text, m) {
   return card;
 }
 
+// Supervisor verdict for one round: approved (reply follows), declined (sent back to the AI with
+// the supervisor's instruction; the declined draft stays viewable), or couldn't review.
+function reviewCard(r, m, key) {
+  // A review still marked running in a finished message was cut off (stopped / app closed).
+  const status = r.status === 'running' && m.status !== 'running' ? 'stopped' : r.status;
+  const card = h('div', 'review ' + status);
+  const ic = h('div', 'review-ic');
+  ic.append(icon(status === 'approved' ? 'shieldCheck' : status === 'declined' ? 'shieldX' : 'shield', 16));
+  const main = h('div', 'review-main');
+  const title = {
+    running: `Supervisor is checking the work${r.round > 1 ? ` (attempt ${r.round})` : ''}`,
+    approved: r.round > 1 ? `Supervisor approved on attempt ${r.round}` : 'Supervisor approved',
+    declined: r.final ? `Supervisor declined again, showing the last attempt anyway` : `Supervisor declined, sent back to fix`,
+    error: "Supervisor couldn't review this reply",
+    stopped: 'Review stopped',
+  }[status] || 'Supervisor';
+  main.append(h('b', status === 'running' ? 'shimmer' : '', title));
+  if (r.reason) main.append(h('span', 'review-reason', r.reason));
+  if (status === 'declined' && (r.fix || r.draft)) {
+    const d = h('details', 'review-more'); d.dataset.key = key + 'm';
+    d.append(h('summary', '', 'What was sent back and the declined draft'));
+    if (r.fix) { d.append(h('div', 'review-label', 'Instruction to the AI')); d.append(markdown(r.fix, 'review-fix')); }
+    if (r.draft) { d.append(h('div', 'review-label', 'Declined draft')); d.append(markdown(r.draft, 'review-draft')); }
+    main.append(d);
+  }
+  const meta = [r.model, typeof r.cost === 'number' && `$${r.cost.toFixed(4)}`].filter(Boolean).join('  ·  ');
+  if (meta) main.append(h('span', 'review-meta', meta));
+  card.append(ic, main);
+  return card;
+}
+
 function renderAssistant(m, el) {
   // Keep expanded sections open across re-renders while streaming.
   const open = new Set([...el.querySelectorAll('details[open]')].map((d) => d.dataset.key));
@@ -418,6 +469,7 @@ function renderAssistant(m, el) {
       const rows = h('div', 'rows'); b.tools.forEach((t) => rows.append(toolRow(t)));
       d.append(s, rows); body.append(d);
     } else if (b.type === 'text') body.append(markdown(b.text));
+    else if (b.type === 'review') body.append(reviewCard(b, m, key));
     else if (b.type === 'error') body.append(errorCard(b.text, m));
   });
   if (m.status === 'running' && !blocks.length) { const w = h('div', 'working'); w.append(h('span', 'shimmer', 'Working')); body.append(w); }
@@ -568,6 +620,9 @@ function renderChips() {
   const lv = efforts();
   $('effortChip').hidden = !lv.length;
   if (lv.length) chip($('effortChip'), 'brain', effort ? effort[0].toUpperCase() + effort.slice(1) : 'Auto');
+  const sv = supervisorOf(chat);
+  $('supervisorChip').hidden = !sv;
+  if (sv) { chip($('supervisorChip'), 'shieldCheck', sv.name, 'supervisor'); $('supervisorChip').title = `Supervisor: ${sv.name} checks every reply before you see it`; }
   const ws = workspace(chat), ro = chat.access === 'read';
   const text = { local: 'Local', folder: base(chat.cwd) || 'Folder', file: base(chat.file) || 'File' }[ws];
   chip($('workspaceChip'), ro ? 'lock' : { local: 'monitor', folder: 'folder', file: 'file' }[ws], text,
@@ -651,6 +706,23 @@ function effortPop(pop) {
     list.append(option(name[0].toUpperCase() + name.slice(1), rest.join(' — '), effort === e.id,
       () => { effort = e.id; chat.effort = e.id; renderChips(); closePop(); }));
   });
+  pop.append(list);
+}
+
+// Supervisor on/off for this chat; the choice is also the default for new chats.
+function setSupervisor(sv) {
+  chat.supervisor = sv ? sv.id : '';
+  settings.supervisor = chat.supervisor; saveSettings();
+  renderChips();
+  note(sv ? `Supervisor on: ${sv.name} checks every reply before you see it, and sends it back to the AI if it isn't right.`
+    : 'Supervisor off');
+  save();
+}
+function supervisorPop(pop) {
+  pop.append(h('div', 'pop-title', 'Supervisor'));
+  const list = h('div', 'opt-list'), cur = supervisorOf(chat);
+  SUPERVISORS.forEach((s) => list.append(option(s.name, s.desc, cur === s, () => { closePop(); setSupervisor(s); }, 'shieldCheck')));
+  if (cur) { list.append(h('div', 'opt-sep')); list.append(option('Off', 'Replies go straight to you', false, () => { closePop(); setSupervisor(null); }, 'x')); }
   pop.append(list);
 }
 
@@ -995,6 +1067,7 @@ function toast(text, ic = 'check') {
 $('modelChip').onclick = () => openPop($('modelChip'), modelPop, 380);
 $('effortChip').onclick = () => openPop($('effortChip'), effortPop, 320);
 $('workspaceChip').onclick = () => openPop($('workspaceChip'), workspacePop, 360);
+$('supervisorChip').onclick = () => openPop($('supervisorChip'), supervisorPop, 360);
 
 // --- Usage limits -------------------------------------------------------------
 function resetsIn(ms) {
@@ -1096,6 +1169,16 @@ function runLocal(name, arg) {
     setModel(m.id); note(`Model: ${m.label}`);
     return;
   }
+  if (name === 'add-supervisor') {
+    const q = arg.toLowerCase();
+    const s = q && SUPERVISORS.find((x) => x.id.includes(q.replace(/\s+/g, '-')) || x.name.toLowerCase().includes(q));
+    if (s) { setSupervisor(s); return; }
+    if (q) note(`No supervisor matches "${arg}".`);
+    // No (matching) name: pick from the list, anchored to the message box.
+    openPop($('in'), supervisorPop, 360);
+    return;
+  }
+  if (name === 'remove-supervisor') { if (supervisorOf(chat)) setSupervisor(null); else note('The supervisor is already off.'); return; }
   if (name === 'effort') {
     const lv = efforts();
     if (!lv.length) { note('This model has no thinking levels.'); return; }
@@ -1159,8 +1242,12 @@ $('f').onsubmit = (e) => {
   $('in').value = ''; autosize(); $('scroll').scrollTop = 1e9;
   save();
   setBusy(true);
+  const sv = supervisorOf(chat);
   window.hub.send({ provider: provider.id, model: modelId, effort: lv, prompt, cwd: chat.cwd, session, access: chat.access || 'read',
-    command: cmd ? cmd.name : null });
+    command: cmd ? cmd.name : null,
+    supervisor: sv && !cmd ? { model: sv.model, effort: sv.effort, label: sv.name } : null,
+    // The supervisor sees just this request, not the whole conversation (keeps reviews cheap).
+    userText: text + (files.length ? `\n[Attached files: ${files.join(', ')}]` : '') });
 };
 
 $('in').onkeydown = (e) => {

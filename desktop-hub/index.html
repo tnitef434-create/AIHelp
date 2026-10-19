@@ -153,6 +153,25 @@
   .ai:hover .foot .copy{opacity:1}
   .note{align-self:center;display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--mute);white-space:pre-wrap;
     border:1px solid var(--line);background:var(--s1);border-radius:12px;padding:8px 14px;max-width:100%}
+  /* Supervisor verdict card (approved / declined / checking) */
+  .review{display:flex;gap:12px;padding:12px 14px;border-radius:14px;font-size:13px;color:var(--fg2);position:relative;overflow:hidden;
+    border:1px solid var(--line);background:linear-gradient(135deg,var(--tint,rgba(255,255,255,.04)),rgba(255,255,255,.01) 50%);animation:rise .3s var(--ease)}
+  .review::before{content:'';position:absolute;left:0;top:12px;bottom:12px;width:2.5px;border-radius:0 3px 3px 0;background:var(--rc,var(--mute))}
+  .review.approved{--rc:var(--add);--tint:rgba(134,224,165,.08);border-color:rgba(134,224,165,.2)}
+  .review.declined{--rc:var(--del);--tint:rgba(245,154,154,.08);border-color:rgba(245,154,154,.2)}
+  .review.error{--rc:#e8c37a;--tint:rgba(232,195,122,.07);border-color:rgba(232,195,122,.18)}
+  .review-ic{width:28px;height:28px;border-radius:9px;flex:none;display:grid;place-items:center;color:var(--rc,var(--mute));
+    background:rgba(255,255,255,.04);border:1px solid var(--line)}
+  .review-main{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+  .review-main>b{color:var(--fg);font-weight:600;font-size:13.5px;letter-spacing:-.01em}
+  .review-reason{color:var(--fg2);overflow-wrap:anywhere}
+  .review-meta{color:var(--faint);font-size:11.5px;margin-top:4px}
+  .review-more{margin-top:6px}
+  .review-more>summary{cursor:pointer;color:var(--mute);font-size:12px;width:fit-content}
+  .review-more>summary:hover{color:var(--fg)}
+  .review-label{color:var(--faint);font-size:11px;text-transform:uppercase;letter-spacing:.06em;margin:10px 0 2px}
+  .review-fix,.review-draft{color:var(--mute);font-size:13px;border-left:1px solid var(--line2);padding-left:12px;max-height:320px;overflow:auto}
+  #supervisorChip .ic:first-child{color:var(--add)}
   /* Error card: icon, friendly title, raw details, actions */
   .err{display:flex;gap:14px;padding:14px 16px;border-radius:16px;font-size:13px;color:var(--fg2);position:relative;overflow:hidden;
     background:linear-gradient(135deg,rgba(245,154,154,.09),rgba(245,154,154,.02) 45%,rgba(255,255,255,.015));
@@ -514,6 +533,7 @@
         <button type="button" id="attachBtn" class="chip icon-chip" title="Attach files (or drop them anywhere)"></button>
         <button type="button" id="modelChip" class="chip"></button>
         <button type="button" id="effortChip" class="chip" hidden></button>
+        <button type="button" id="supervisorChip" class="chip" hidden></button>
         <span class="sep"></span>
         <button type="button" id="workspaceChip" class="chip"></button>
         <span class="grow"></span>

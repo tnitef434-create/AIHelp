@@ -524,65 +524,192 @@ ipcMain.handle('home', () => app.getPath('home'));
 ipcMain.on('openExternal', (_e, url) => { if (/^https?:\/\//.test(url)) shell.openExternal(url); });
 
 // --- Running a turn ---------------------------------------------------------
-let running = null;
-ipcMain.on('send', (event, msg) => {
+let running = null, job = null;
+
+// Runs one CLI turn, streaming normalized events to emit(). Resolves { code, stopped }.
+function runTurn(p, msg, emit) {
+  return new Promise((resolve) => {
+    let args = p.args(msg), input = msg.prompt;
+    if (msg.command && p.commandRun) {
+      const c = p.commandRun(msg.command);
+      args = [...args, ...c.args];
+      input = c.input(msg.prompt);
+    }
+    const child = spawnCli(binOf(msg.provider), args, msg.cwd && fs.existsSync(msg.cwd) ? msg.cwd : undefined);
+    running = child;
+    const state = {};
+    let buf = '', errText = '', sawError = false;
+    const finish = (code) => { running = null; resolve({ code, stopped: !!child.stopped }); };
+    // Custom CLIs print plain text: stream it straight into the answer.
+    if (p.plain) {
+      child.stdin.on('error', () => {});
+      child.stdin.end(input);
+      child.stdout.on('data', (d) => emit({ kind: 'text', delta: true, text: stripAnsi(d.toString()) }));
+      child.stderr.on('data', (d) => { errText += stripAnsi(d.toString()); });
+      child.on('error', (e) => { sawError = true; emit({ kind: 'error', text: e.message }); });
+      child.on('close', (code) => {
+        if (code && !sawError && !child.stopped) emit({ kind: 'error', text: errText.trim() || `Exited with code ${code}` });
+        finish(code);
+      });
+      return;
+    }
+    const handle = (line) => {
+      line = line.trim();
+      if (!line) return;
+      let o;
+      try { o = JSON.parse(line); } catch { errText += line + '\n'; return; }
+      p.parse(o, (ev) => { if (ev.kind === 'error') sawError = true; emit(ev); }, state);
+    };
+    child.stdin.on('error', () => {});
+    child.stdin.end(input);
+    child.stdout.on('data', (d) => {
+      buf += stripAnsi(d.toString());
+      let i;
+      while ((i = buf.indexOf('\n')) >= 0) { handle(buf.slice(0, i)); buf = buf.slice(i + 1); }
+    });
+    // stderr is progress/log noise; only show it when the run fails without a reported error.
+    child.stderr.on('data', (d) => { errText += stripAnsi(d.toString()); });
+    child.on('error', (e) => emit({ kind: 'error', text: e.message }));
+    child.on('close', (code) => {
+      handle(buf);
+      if (state.usage) emit(state.usage);
+      if (code && !sawError && !child.stopped) emit({ kind: 'error', text: errText.trim() || `Exited with code ${code}` });
+      finish(code);
+    });
+  });
+}
+
+// --- Supervisor -----------------------------------------------------------------
+// /add-supervisor: a cheap Claude model checks each reply before the user sees it. The worker's
+// thinking and tool calls stream live; its answer text is held back until the review. A decline
+// sends the supervisor's instruction back to the worker (same session) for another attempt.
+// The review is kept cheap: a short custom system prompt (replaces Claude Code's large default),
+// no tools, no MCP servers, an empty working folder (no project CLAUDE.md), and a clipped digest
+// of the work instead of the whole conversation.
+const SUPERVISOR_RETRIES = 2;
+const SUPERVISOR_PROMPT = `You are a supervisor checking another AI agent's work before the user sees it.
+You cannot run tools or open files: judge only from the request, the work log and the final answer below.
+Approve when the answer does what was asked and nothing in the evidence suggests it is broken, incomplete or wrong.
+Decline only for real problems: the request was not done or only partly done, a command or edit failed and was left unresolved, an obvious bug or mistake, claims the work log does not back up, or a wrong answer. Never decline over style or wording.
+When declining, write "fix" as a direct instruction to the agent: what is wrong, what to do, and how to check it worked.
+Reply with ONLY one line of JSON and nothing else:
+{"verdict":"approve" or "decline","reason":"one short sentence","fix":"instruction for the agent, empty when approving"}`;
+
+const clipText = (s, n, tail) => (s.length <= n ? s : tail ? '…' + s.slice(-n) : s.slice(0, n) + '…');
+// Short log of what the worker did (tool events merged by id), clipped to keep the review cheap.
+function workLog(events) {
+  const byId = new Map();
+  for (const ev of events) {
+    const t = byId.get(ev.id) || {};
+    for (const k in ev) if (ev[k] !== undefined) t[k] = ev[k];
+    byId.set(ev.id, t);
+  }
+  const out = [...byId.values()].map((t) => {
+    let line = `- ${t.action || 'tool'}: ${clipText(String(t.target || ''), 300)}`;
+    if (t.added || t.removed) line += ` (+${t.added || 0} -${t.removed || 0})`;
+    line += ` [${t.status || 'done'}]`;
+    if (t.output && (t.action === 'run' || t.status === 'error')) line += `\n  output (end): ${clipText(String(t.output).trim(), 600, true)}`;
+    return line;
+  });
+  return clipText(out.join('\n'), 5000, true) || '(no tool calls)';
+}
+
+// Asks the supervisor model for a verdict. Resolves { approve, reason, fix, cost } | { error } | { stopped }.
+function review(sv, d) {
+  return new Promise((resolve) => {
+    if (!resolved.claude && !detect('claude')) {
+      resolve({ error: 'Claude Code is not installed, so the supervisor cannot run. Install it in Settings → Providers.' });
+      return;
+    }
+    const dir = path.join(dataDir(), 'supervisor');
+    fs.mkdirSync(dir, { recursive: true });
+    const promptFile = path.join(dir, 'system-prompt.md');
+    fs.writeFileSync(promptFile, SUPERVISOR_PROMPT);
+    // .exe CLIs get arguments untouched; .cmd shims run through cmd.exe, which needs quoting.
+    const viaShell = isWin && !/\.exe$/i.test(binOf('claude').replace(/^"|"$/g, ''));
+    const q = (a) => (!viaShell ? a : a === '' ? '""' : /\s/.test(a) ? `"${a}"` : a);
+    const args = ['-p', '--output-format', 'json', '--model', sv.model, ...(sv.effort ? ['--effort', sv.effort] : []),
+      '--system-prompt-file', q(promptFile), '--no-session-persistence', '--strict-mcp-config', '--tools', q('')];
+    const input = `REQUEST FROM THE USER:\n${clipText(d.request, 3000)}\n\n` +
+      `WORK LOG (attempt ${d.round}):\n${d.log}\n\nFINAL ANSWER FROM THE AGENT:\n${clipText(d.answer || '(empty)', 6000, true)}`;
+    const child = spawnCli(binOf('claude'), args, dir);
+    running = child;
+    let out = '', err = '';
+    const timer = setTimeout(() => { child.timedOut = true; killTree(child); }, 180000);
+    child.stdin.on('error', () => {});
+    child.stdin.end(input);
+    child.stdout.on('data', (b) => { out += b; });
+    child.stderr.on('data', (b) => { err += b; });
+    child.on('error', (e) => { err += e.message; });
+    child.on('close', () => {
+      clearTimeout(timer);
+      running = null;
+      if (child.stopped) { resolve({ stopped: true }); return; }
+      if (child.timedOut) { resolve({ error: 'The supervisor took too long to answer.' }); return; }
+      let res;
+      try { res = JSON.parse(stripAnsi(out).trim().split('\n').pop()); } catch {}
+      if (!res) { resolve({ error: stripAnsi(err || out).trim() || 'The supervisor gave no answer.' }); return; }
+      const cost = res.total_cost_usd;
+      if (res.is_error) { resolve({ error: String(res.result || res.subtype || 'The supervisor failed.'), cost }); return; }
+      const text = String(res.result || '');
+      let v = null;
+      try { const m = /\{[\s\S]*\}/.exec(text); v = m && JSON.parse(m[0]); } catch {}
+      const verdict = String((v && v.verdict) || (/\bdecline/i.test(text) ? 'decline' : /\bapprove/i.test(text) ? 'approve' : '')).toLowerCase();
+      if (verdict !== 'approve' && verdict !== 'decline') { resolve({ error: `Unclear verdict: ${clipText(text, 300)}`, cost }); return; }
+      const reason = String((v && v.reason) || clipText(text, 300));
+      resolve({ approve: verdict === 'approve', reason, fix: String((v && v.fix) || reason), cost });
+    });
+  });
+}
+
+async function supervised(p, msg, emit) {
+  const sv = msg.supervisor;
+  let session = msg.session, prompt = msg.prompt;
+  for (let round = 1; ; round++) {
+    const held = [], tools = [];
+    const r = await runTurn(p, { ...msg, prompt, session }, (ev) => {
+      if (ev.kind === 'session') session = ev.id;
+      if (ev.kind === 'text') { held.push(ev); return; }
+      if (ev.kind === 'tool') tools.push(ev);
+      emit(ev);
+    });
+    const release = () => held.forEach(emit);
+    // Failed or stopped turns are shown as they are; there is nothing useful to review.
+    if (r.stopped || r.code || job.stopped) { release(); return r; }
+    const answer = held.map((e) => e.text).join(held.some((e) => e.delta) ? '' : '\n\n');
+    const head = { kind: 'review', round, model: sv.label };
+    emit({ ...head, status: 'running' });
+    const v = await review(sv, { request: msg.userText || msg.prompt, answer, log: workLog(tools), round });
+    if (v.stopped || job.stopped) { emit({ ...head, status: 'stopped' }); release(); return { code: 0, stopped: true }; }
+    if (v.error) { emit({ ...head, status: 'error', reason: v.error, cost: v.cost }); release(); return r; }
+    if (v.approve) { emit({ ...head, status: 'approved', reason: v.reason, cost: v.cost }); release(); return r; }
+    const last = round > SUPERVISOR_RETRIES;
+    emit({ ...head, status: 'declined', reason: v.reason, fix: v.fix, cost: v.cost, draft: answer, final: last });
+    if (last) { release(); return r; }
+    const retry = `A supervisor reviewed your last answer and declined it.\nReason: ${v.reason}\nWhat to fix: ${v.fix}\n` +
+      'Fix this now, check that it works, then give your final answer to the original request.';
+    // With a CLI session the worker remembers its last attempt; otherwise replay it as context.
+    prompt = session ? retry : `${msg.prompt}\n\nAssistant: ${answer}\n\nUser: ${retry}`;
+  }
+}
+
+ipcMain.on('send', async (event, msg) => {
   const p = PROVIDERS[msg.provider];
   if (!p) return;
   const emit = (ev) => event.sender.send('ev', ev);
-  let args = p.args(msg), input = msg.prompt;
-  if (msg.command && p.commandRun) {
-    const c = p.commandRun(msg.command);
-    args = [...args, ...c.args];
-    input = c.input(msg.prompt);
-  }
   if (!resolved[msg.provider] && !detect(msg.provider)) {
     emit({ kind: 'error', text: `${p.label} was not found on this PC. Open Settings → Providers to install it or set its location.` });
     event.sender.send('done', 1); return;
   }
-  const child = spawnCli(binOf(msg.provider), args, msg.cwd && fs.existsSync(msg.cwd) ? msg.cwd : undefined);
-  running = child;
-  const state = {};
-  let buf = '', errText = '', sawError = false;
-  // Custom CLIs print plain text: stream it straight into the answer.
-  if (p.plain) {
-    child.stdin.on('error', () => {});
-    child.stdin.end(input);
-    child.stdout.on('data', (d) => emit({ kind: 'text', delta: true, text: stripAnsi(d.toString()) }));
-    child.stderr.on('data', (d) => { errText += stripAnsi(d.toString()); });
-    child.on('error', (e) => { sawError = true; emit({ kind: 'error', text: e.message }); });
-    child.on('close', (code) => {
-      running = null;
-      if (code && !sawError && !child.stopped) emit({ kind: 'error', text: errText.trim() || `Exited with code ${code}` });
-      event.sender.send('done', child.stopped ? 'stopped' : code);
-    });
-    return;
-  }
-  const handle = (line) => {
-    line = line.trim();
-    if (!line) return;
-    let o;
-    try { o = JSON.parse(line); } catch { errText += line + '\n'; return; }
-    p.parse(o, (ev) => { if (ev.kind === 'error') sawError = true; emit(ev); }, state);
-  };
-  child.stdin.on('error', () => {});
-  child.stdin.end(input);
-  child.stdout.on('data', (d) => {
-    buf += stripAnsi(d.toString());
-    let i;
-    while ((i = buf.indexOf('\n')) >= 0) { handle(buf.slice(0, i)); buf = buf.slice(i + 1); }
-  });
-  // stderr is progress/log noise; only show it when the run fails without a reported error.
-  child.stderr.on('data', (d) => { errText += stripAnsi(d.toString()); });
-  child.on('error', (e) => emit({ kind: 'error', text: e.message }));
-  child.on('close', (code) => {
-    handle(buf);
-    if (state.usage) emit(state.usage);
-    running = null;
-    if (code && !sawError && !child.stopped) emit({ kind: 'error', text: errText.trim() || `Exited with code ${code}` });
-    event.sender.send('done', child.stopped ? 'stopped' : code);
-  });
+  job = { stopped: false };
+  // Provider slash commands run as-is, without review.
+  const r = msg.supervisor && !msg.command ? await supervised(p, msg, emit) : await runTurn(p, msg, emit);
+  event.sender.send('done', r.stopped || job.stopped ? 'stopped' : r.code);
 });
-ipcMain.on('stop', () => { if (running) { running.stopped = true; killTree(running); } });
+ipcMain.on('stop', () => {
+  if (job) job.stopped = true;
+  if (running) { running.stopped = true; killTree(running); }
+});
 
 // Apps launched from the macOS Dock / Linux menus don't get the terminal's PATH, so CLIs
 // (and the node they need) wouldn't be found. Load PATH from the user's login shell.
