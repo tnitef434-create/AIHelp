@@ -267,7 +267,11 @@
   textarea::placeholder{color:#5e5e5e}
   textarea:focus-visible{outline:none}
   .card-text{display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
-  .tools{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+  /* One row: chips shrink (and truncate) before the send button would wrap. */
+  .tools{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;min-width:0}
+  .tools .chip{min-width:0;flex-shrink:1}
+  .tools #attachBtn,.tools .sep,#go{flex-shrink:0}
+  @media (max-width:1180px){.tools .chip-sub{display:none}}
   .grow{flex:1}
   .chip{height:32px;display:inline-flex;align-items:center;gap:7px;padding:0 10px 0 9px;border-radius:10px;color:var(--fg2);font-size:12.5px;
     font-weight:500;border:1px solid transparent;transition:background .15s,border-color .15s,color .15s;max-width:260px}
@@ -512,6 +516,21 @@
   .bar{height:6px;background:#1c1c1c;border-radius:6px;margin-top:8px;overflow:hidden}
   .bar i{display:block;height:100%;background:linear-gradient(90deg,#9a9a9a,#fff);border-radius:6px;transition:width .8s var(--ease)}
   .bar i.warn{background:linear-gradient(90deg,#8a8a8a,#d8d8d8)}.bar i.bad{background:var(--del)}
+  /* Reply to a selection: floating bar over selected text, quotes above the message box and in your messages */
+  #selbar{position:fixed;z-index:30;display:flex;gap:2px;padding:3px;border-radius:11px;background:rgba(18,18,18,.96);border:1px solid var(--line2);
+    backdrop-filter:blur(16px);box-shadow:0 12px 34px rgba(0,0,0,.7);animation:pop .16s var(--ease-out)}
+  #selbar button{height:28px;display:inline-flex;align-items:center;gap:6px;padding:0 10px 0 8px;border-radius:8px;font-size:12.5px;font-weight:550;
+    color:var(--fg2);transition:background .12s,color .12s}
+  #selbar button:hover{background:var(--s4);color:#fff}
+  #quotes{display:flex;flex-direction:column;gap:6px;margin:0 0 10px -4px}
+  .quote{display:flex;align-items:flex-start;gap:8px;padding:7px 8px 7px 10px;border-radius:10px;background:rgba(255,255,255,.025);
+    border:1px solid var(--line);border-left:2px solid var(--line3);color:var(--mute);font-size:12.5px;line-height:1.5}
+  #quotes .quote{animation:rise .25s var(--ease-out)}
+  .quote>.ic{margin-top:3px;color:var(--faint)}
+  .quote-text{flex:1;min-width:0;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;white-space:pre-wrap;overflow-wrap:anywhere}
+  .quote-x{width:20px;height:20px;border-radius:6px;display:grid;place-items:center;color:var(--faint);flex:none;transition:background .12s,color .12s}
+  .quote-x:hover{background:rgba(255,255,255,.08);color:#fff}
+  .user .quote{margin-bottom:8px}
   /* Respect "reduce motion" in Windows/macOS settings. */
   @media (prefers-reduced-motion:reduce){
     *,*::before,*::after{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important}
@@ -542,6 +561,7 @@
   <button id="toBottom" title="Jump to latest"></button>
   <form id="f"><div id="menu" hidden></div>
     <div class="composer">
+      <div id="quotes" hidden></div>
       <div id="attachments" hidden></div>
       <textarea id="in" rows="1" placeholder="Message Onyx, or type / for commands"></textarea>
       <div class="tools">
@@ -561,6 +581,7 @@
 </main>
 <div id="pop" hidden></div>
 <div id="toasts"></div>
+<div id="selbar" hidden><button type="button" id="selReply"></button><button type="button" id="selCopy"></button></div>
 <div id="dropzone" hidden><div class="drop-card"><div class="drop-ic"></div><b>Drop files to attach</b><span>Onyx sends their paths so the AI can read them</span></div></div>
 <script src="renderer.js"></script>
 </body></html>

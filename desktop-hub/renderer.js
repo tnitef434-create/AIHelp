@@ -37,6 +37,7 @@ const ICONS = {
   shield: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6z',
   shieldCheck: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM8.8 12l2.2 2.2 4.2-4.4',
   shieldX: 'M12 3l7 3v6c0 4.5-3 7.6-7 9-4-1.4-7-4.5-7-9V6zM9.5 9.5l5 5M14.5 9.5l-5 5',
+  reply: 'M10 8L5 12l5 4M5 12h9a5 5 0 0 1 5 5v1',
   globe: 'M12 3a9 9 0 1 0 0 18 9 9 0 0 0 0-18zM3.5 9h17M3.5 15h17M12 3c2.4 2.5 3.6 5.5 3.6 9s-1.2 6.5-3.6 9c-2.4-2.5-3.6-5.5-3.6-9s1.2-6.5 3.6-9z',
 };
 function icon(name, size = 16) {
@@ -528,6 +529,7 @@ function renderMessage(m, animate = false) {
   if (m.role === 'user') {
     el = h('div', 'msg user');
     if (m.files && m.files.length) { const a = h('div', 'atts'); m.files.forEach((p) => a.append(attChip(p))); el.append(a); }
+    (m.quotes || []).forEach((q) => el.append(quoteBlock(q)));
     if (m.text) el.append(markdown(m.text, 'text'));
     // Hover actions under your own messages: copy, or pull the text back into the box to edit.
     const acts = h('div', 'user-acts');
@@ -535,6 +537,7 @@ function renderMessage(m, animate = false) {
     edit.onclick = () => {
       if (busy) return;
       $('in').value = m.text; attachments = (m.files || []).slice(); renderAttachments();
+      quotes = (m.quotes || []).slice(); renderQuotes();
       $('in').focus(); $('in').setSelectionRange(m.text.length, m.text.length);
     };
     acts.append(copyButton(() => m.text), edit);
@@ -607,6 +610,8 @@ function renderChat() {
   $('log').innerHTML = '';
   if (!chat.messages.length) renderEmpty();
   chat.messages.forEach((m) => renderMessage(m));
+  // Quotes belong to the chat they were taken from.
+  if (quotes.length) { quotes = []; renderQuotes(); }
   // Fade the whole chat in once instead of animating every message.
   $('log').classList.remove('swap'); void $('log').offsetWidth; $('log').classList.add('swap');
   toEnd();
@@ -865,6 +870,69 @@ function renderAttachments() {
   attachments.forEach((p, i) => box.append(attChip(p, () => { attachments.splice(i, 1); renderAttachments(); autosize(); })));
   autosize();
 }
+// --- Replying to a selection ------------------------------------------------------
+// Select text in any message: a small bar offers Reply (pins it as a quote above the message
+// box, sent with your next message) and Copy.
+let quotes = [];
+const quoted = (qs) => qs.map((q) => q.split('\n').map((l) => `> ${l}`).join('\n')).join('\n\n');
+function quoteBlock(text, onRemove) {
+  const b = h('div', 'quote');
+  b.append(icon('reply', 13), h('span', 'quote-text', text));
+  if (onRemove) { const x = h('button', 'quote-x'); x.type = 'button'; x.title = 'Remove'; x.append(icon('x', 12)); x.onclick = onRemove; b.append(x); }
+  return b;
+}
+function renderQuotes() {
+  const box = $('quotes');
+  box.innerHTML = '';
+  box.hidden = !quotes.length;
+  quotes.forEach((q, i) => box.append(quoteBlock(q, () => { quotes.splice(i, 1); renderQuotes(); $('in').focus(); })));
+  autosize();
+}
+// The current selection when it lies inside the chat, with its position on screen.
+function chatSelection() {
+  const sel = getSelection();
+  if (!sel || sel.isCollapsed || !sel.rangeCount) return null;
+  const range = sel.getRangeAt(0), node = range.commonAncestorContainer;
+  const el = node.nodeType === 1 ? node : node.parentElement;
+  const text = sel.toString().trim();
+  return el && el.closest('#log') && text ? { text, rect: range.getBoundingClientRect() } : null;
+}
+function hideSelBar() { $('selbar').hidden = true; }
+function showSelBar() {
+  const s = chatSelection();
+  if (!s) { hideSelBar(); return; }
+  const bar = $('selbar');
+  bar.hidden = false;
+  const w = bar.offsetWidth, hh = bar.offsetHeight;
+  bar.style.left = Math.min(Math.max(8, s.rect.left + s.rect.width / 2 - w / 2), innerWidth - w - 8) + 'px';
+  bar.style.top = (s.rect.top - hh - 8 > 64 ? s.rect.top - hh - 8 : s.rect.bottom + 8) + 'px';
+}
+$('selReply').append(icon('reply', 14), h('span', '', 'Reply'));
+$('selCopy').append(icon('copy', 14), h('span', '', 'Copy'));
+// Keep the selection alive while clicking the bar.
+$('selbar').addEventListener('mousedown', (e) => e.preventDefault());
+$('selReply').onclick = () => {
+  const s = chatSelection();
+  if (!s) return;
+  if (!quotes.includes(s.text)) quotes.push(s.text.slice(0, 4000));
+  getSelection().removeAllRanges(); hideSelBar();
+  renderQuotes(); $('in').focus();
+};
+$('selCopy').onclick = async () => {
+  const s = chatSelection();
+  if (!s) return;
+  // The selection is still active (the bar keeps it), so the classic copy command works if the
+  // clipboard API is refused.
+  let ok = false;
+  try { await navigator.clipboard.writeText(s.text); ok = true; } catch { try { ok = document.execCommand('copy'); } catch {} }
+  toast(ok ? 'Copied to clipboard' : 'Could not copy', ok ? 'check' : 'alert');
+  hideSelBar();
+};
+$('log').addEventListener('mouseup', () => setTimeout(showSelBar, 0));
+document.addEventListener('mousedown', (e) => { if (!$('selbar').contains(e.target)) hideSelBar(); });
+document.addEventListener('selectionchange', () => { if (!$('selbar').hidden && !chatSelection()) hideSelBar(); });
+$('scroll').addEventListener('scroll', hideSelBar, { passive: true });
+
 function addAttachments(paths) {
   const fresh = paths.filter((p) => p && !attachments.includes(p));
   if (!fresh.length) return;
@@ -1190,9 +1258,27 @@ function usagePop(pop) {
 $('usageBtn').onclick = () => openPop($('usageBtn'), usagePop, 300);
 
 // --- Slash-command menu -------------------------------------------------------
+// The "/word" being typed at the cursor, anywhere in the message (e.g. "check this /we|").
+// atStart: it is the first thing in the message.
+function slashAtCaret() {
+  const t = $('in'), end = t.selectionStart;
+  const m = /(^|\s)\/(\S*)$/.exec(t.value.slice(0, end));
+  if (!m) return null;
+  const start = end - m[2].length - 1;
+  return { start, end, query: m[2], atStart: !t.value.slice(0, start).trim() };
+}
+// Onyx's own commands work anywhere in a message; a CLI's commands must start the message.
+// Mid-message, these run when picked (or when the message is sent) and the rest of the text stays.
+const INLINE_COMMANDS = new Set(['web', 'add-supervisor', 'remove-supervisor', 'model', 'effort', 'help']);
+function runInline(name) {
+  if (name === 'model') $('modelChip').click();
+  else if (name === 'effort') { if (!$('effortChip').hidden) $('effortChip').click(); else note('This model has no thinking levels.'); }
+  else runLocal(name, '');
+}
 function updateMenu() {
-  const m = /^\/(\S*)$/.exec($('in').value);
-  menuItems = m ? commands.filter((c) => c.name.toLowerCase().includes(m[1].toLowerCase())) : [];
+  const s = slashAtCaret();
+  menuItems = s ? commands.filter((c) => (s.atStart || INLINE_COMMANDS.has(c.name)) &&
+    c.name.toLowerCase().includes(s.query.toLowerCase())) : [];
   menuIndex = Math.min(menuIndex, Math.max(menuItems.length - 1, 0));
   const menu = $('menu');
   menu.innerHTML = '';
@@ -1208,8 +1294,22 @@ function updateMenu() {
   if (sel) sel.scrollIntoView({ block: 'nearest' });
 }
 function pick(i) {
-  $('in').value = '/' + menuItems[i].name + ' ';
-  menuItems = []; $('menu').hidden = true; $('in').focus();
+  const c = menuItems[i], s = slashAtCaret(), t = $('in');
+  menuItems = []; $('menu').hidden = true; t.focus();
+  if (!s) return;
+  if (s.atStart || !INLINE_COMMANDS.has(c.name)) {
+    // Completes the word in place, so a command at the start can still take arguments.
+    const rest = t.value.slice(s.end).replace(/^\S*/, '');
+    t.value = t.value.slice(0, s.start) + '/' + c.name + ' ' + rest.replace(/^ /, '');
+    const caret = s.start + c.name.length + 2;
+    t.setSelectionRange(caret, caret);
+  } else {
+    // Mid-message: run it now and keep the draft, minus the "/word".
+    t.value = (t.value.slice(0, s.start) + t.value.slice(s.end).replace(/^\S*/, '')).replace(/[ \t]{2,}/g, ' ');
+    t.setSelectionRange(s.start, s.start);
+    runInline(c.name);
+  }
+  autosize();
 }
 // Grow the message box with its content (capped by max-height in CSS).
 function autosize() {
@@ -1218,6 +1318,8 @@ function autosize() {
   t.closest('.composer').classList.toggle('ready', !!t.value.trim() || attachments.length > 0);
 }
 $('in').oninput = () => { menuIndex = 0; updateMenu(); autosize(); };
+// Moving the cursor onto or off a "/word" opens or closes the command menu.
+$('in').onclick = () => updateMenu();
 
 function runLocal(name, arg) {
   if (name === 'new' || name === 'clear') { if (!busy) newChat(); return; }
@@ -1262,7 +1364,7 @@ function runLocal(name, arg) {
 // Text of the conversation so far, for a provider that has no session in this chat yet.
 function transcript() {
   return chat.messages.filter((m) => m.role === 'user' || m.role === 'assistant').map((m) => m.role === 'user'
-    ? `User: ${m.text}${m.files && m.files.length ? `\n[Attached files: ${m.files.join(', ')}]` : ''}`
+    ? `User: ${m.quotes && m.quotes.length ? `${quoted(m.quotes)}\n\n` : ''}${m.text}${m.files && m.files.length ? `\n[Attached files: ${m.files.join(', ')}]` : ''}`
     : `Assistant: ${m.events.filter((e) => e.kind === 'text').map((e) => e.text).join('\n\n')}`).join('\n\n');
 }
 
@@ -1280,9 +1382,21 @@ $('f').onsubmit = (e) => {
   e.preventDefault();
   if (busy) { window.hub.stop(); return; }
   const files = attachments.slice();
-  const text = $('in').value.trim() || (files.length ? 'Take a look at the attached file' + (files.length > 1 ? 's.' : '.') : '');
+  let text = $('in').value.trim() || (files.length ? 'Take a look at the attached file' + (files.length > 1 ? 's.' : '.') : '');
   if (!text) return;
   $('menu').hidden = true;
+  // Onyx switches typed mid-message ("check this /web"): turn them on (or off), send the rest.
+  if (!text.startsWith('/')) {
+    const ran = [];
+    text = text.replace(/(^|\s)\/(web|add-supervisor|remove-supervisor)(?=\s|$)/g, (all, sp, name) => { ran.push(name); return sp; })
+      .replace(/[ \t]{2,}/g, ' ').trim();
+    for (const name of ran) {
+      if (name === 'web' && !chat.web) setWeb(true);
+      else if (name === 'remove-supervisor' && supervisorOf(chat)) setSupervisor(null);
+      else if (name === 'add-supervisor' && !supervisorOf(chat)) setSupervisor(supervisors().find((s) => s.id === 'opus'));
+    }
+    if (!text) { $('in').value = ''; autosize(); return; }
+  }
 
   const slash = /^\/(\S+)\s*([\s\S]*)$/.exec(text);
   const cmd = slash && commands.find((c) => c.name === slash[1]);
@@ -1293,7 +1407,10 @@ $('f').onsubmit = (e) => {
   const prior = session ? '' : transcript();
   // With a CLI session the CLI remembers the conversation; otherwise replay it as context.
   // Provider commands are sent as-is.
-  let prompt = cmd ? slash[2].trim() : prior ? `${prior}\n\nUser: ${text}` : text;
+  // Quoted parts of the conversation (Reply on a selection) go right before the message.
+  const qs = cmd ? [] : quotes.slice();
+  const ask = qs.length ? `[Replying to this part of the conversation:]\n${quoted(qs)}\n\n${text}` : text;
+  let prompt = cmd ? slash[2].trim() : prior ? `${prior}\n\nUser: ${ask}` : ask;
   // File workspace: tell the AI which file this chat is about (not shown in the chat).
   if (!cmd && workspace(chat) === 'file' && chat.file) prompt = `[Focus on this file: ${chat.file}]\n\n${prompt}`;
   if (files.length) prompt += `\n\n[Attached files - read them from disk:]\n${files.map((p) => `- ${p}`).join('\n')}`;
@@ -1303,8 +1420,9 @@ $('f').onsubmit = (e) => {
   const lv = efforts().some((x) => x.id === effort) ? effort : '';
 
   if (!chat.messages.length) { chat.title = clip(text.replace(/\s+/g, ' '), 50); $('log').innerHTML = ''; $('title').textContent = chat.title; }
-  const userMsg = { role: 'user', text, files, at: Date.now() };
+  const userMsg = { role: 'user', text, files, at: Date.now(), ...(qs.length ? { quotes: qs } : {}) };
   attachments = []; renderAttachments();
+  if (qs.length) { quotes = []; renderQuotes(); }
   chat.messages.push(userMsg); renderMessage(userMsg, true);
   Object.assign(chat, { provider: provider.id, model: modelId, effort: lv });
   liveMsg = { role: 'assistant', provider: provider.id, events: [], status: 'running', at: Date.now(),
@@ -1320,7 +1438,7 @@ $('f').onsubmit = (e) => {
     command: cmd ? cmd.name : null, web: !!chat.web,
     supervisor: sv && !cmd ? { model: sv.model, effort: sv.effort, label: sv.name } : null,
     // The supervisor sees just this request, not the whole conversation (keeps reviews cheap).
-    userText: text + (files.length ? `\n[Attached files: ${files.join(', ')}]` : '') });
+    userText: ask + (files.length ? `\n[Attached files: ${files.join(', ')}]` : '') });
 };
 
 $('in').onkeydown = (e) => {
